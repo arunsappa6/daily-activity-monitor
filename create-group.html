@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#FFFFFF" />
+  <title>Create Group — Daily Activity Monitor</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <header class="navbar" id="navbar">
+    <div class="navbar-inner">
+      <div class="nav-brand"><a href="home.html">Daily Activity Monitor</a></div>
+      <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="nav-links" id="navLinks">
+        <a href="group-dashboard.html" class="nav-link">Group Dashboard</a>
+        <a href="personal-dashboard.html" class="nav-link">My Dashboard</a>
+        <a href="contact.html" class="nav-link">Contact Us</a>
+        <div class="nav-session">
+          <a href="index.html" class="nav-btn nav-btn--ghost">Logout</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main class="register-main">
+
+    <div class="page-header">
+      <h1 class="page-title">Create a Group</h1>
+      <p class="page-subtitle">Set up your group and invite members to collaborate.</p>
+    </div>
+
+    <!-- Group Details -->
+    <div class="form-section">
+      <div class="form-section-title">Group Details</div>
+
+      <div class="form-row form-row--1">
+        <div class="form-group">
+          <label for="groupName">Group Name <span class="required">*</span></label>
+          <input type="text" id="groupName" placeholder="e.g. Smith Family" />
+          <span class="field-error" id="groupNameErr">⚠ Group name is required.</span>
+        </div>
+      </div>
+
+      <div class="admin-notice">
+        👤 <strong>You are the Group Admin</strong> by default as the group creator.
+      </div>
+    </div>
+
+    <!-- Members -->
+    <div class="form-section">
+      <div class="form-section-title">Add Members</div>
+      <div id="membersContainer"></div>
+      <button type="button" class="btn--add-member" id="addMemberBtn">
+        ＋ Add Member
+      </button>
+    </div>
+
+    <!-- Welcome Message Preview -->
+    <div class="form-section">
+      <div class="form-section-title">Welcome Message Preview</div>
+      <p style="font-size:0.85rem; color:var(--color-ink-muted); margin-bottom:0.75rem;">
+        This message will be sent to each member when they are invited. It updates as you fill in the fields above.
+      </p>
+      <div class="welcome-preview" id="welcomePreview">
+        Hi [First Name], Welcome to group [Group Name]. Kindly verify the link sent in this email.
+      </div>
+    </div>
+
+    <button type="button" class="btn--submit" id="createGroupSubmit">Create Group</button>
+
+    <div class="success-banner" id="groupSuccess" role="status">
+      ✅ Group created successfully! Redirecting to your dashboard…
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Daily Activity Monitor. All rights reserved.</p>
+  </footer>
+
+  <script src="main.js"></script>
+  <script src="create-group.js"></script>
+</body>
+</html>

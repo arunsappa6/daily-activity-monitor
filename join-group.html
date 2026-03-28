@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#FFFFFF" />
+  <title>Join Group — Daily Activity Monitor</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <header class="navbar" id="navbar">
+    <div class="navbar-inner">
+      <div class="nav-brand"><a href="home.html">Daily Activity Monitor</a></div>
+      <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="nav-links" id="navLinks">
+        <a href="group-dashboard.html" class="nav-link">Group Dashboard</a>
+        <a href="personal-dashboard.html" class="nav-link">My Dashboard</a>
+        <a href="contact.html" class="nav-link">Contact Us</a>
+        <div class="nav-session">
+          <a href="index.html" class="nav-btn nav-btn--ghost">Logout</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page-main" style="display:flex; justify-content:center; padding-top:3rem;">
+    <div class="auth-box" style="max-width:480px; width:100%;">
+      <h1 class="auth-title">Join a Group</h1>
+      <p class="auth-subtitle" style="margin-bottom:2rem;">Enter the group invite code sent to your email.</p>
+
+      <div class="form-group" style="margin-bottom:1.25rem;">
+        <label for="inviteCode">Invite Code <span class="required">*</span></label>
+        <input type="text" id="inviteCode" placeholder="e.g. GRP-ABC123" style="text-transform:uppercase;" />
+        <span class="field-error" id="inviteCodeErr">⚠ Please enter a valid invite code.</span>
+      </div>
+
+      <button type="button" class="btn--submit" id="joinGroupSubmit">Join Group</button>
+
+      <div class="success-banner" id="joinSuccess" role="status" style="margin-top:1rem;">
+        ✅ You've joined the group! Redirecting…
+      </div>
+
+      <div class="login-footer" style="margin-top:1.25rem;">
+        Want to start a new group instead? <a href="create-group.html">Create Group</a>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Daily Activity Monitor. All rights reserved.</p>
+  </footer>
+
+  <script src="main.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('joinGroupSubmit').addEventListener('click', () => {
+        const code = document.getElementById('inviteCode').value.trim();
+        const errEl = document.getElementById('inviteCodeErr');
+        if (!code) {
+          document.getElementById('inviteCode').classList.add('is-error');
+          errEl.classList.add('visible');
+          return;
+        }
+        document.getElementById('inviteCode').classList.remove('is-error');
+        errEl.classList.remove('visible');
+        document.getElementById('joinGroupSubmit').disabled = true;
+        document.getElementById('joinGroupSubmit').textContent = 'Joining…';
+        setTimeout(() => {
+          document.getElementById('joinGroupSubmit').style.display = 'none';
+          document.getElementById('joinSuccess').classList.add('visible');
+          setTimeout(() => { window.location.href = 'home.html'; }, 1800);
+        }, 800);
+      });
+    });
+  </script>
+</body>
+</html>
