@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#FFFFFF" />
+  <title>Email Verified — Daily Activity Monitor</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <header class="navbar" id="navbar">
+    <div class="navbar-inner">
+      <div class="nav-brand"><a href="index.html">Daily Activity Monitor</a></div>
+      <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="nav-links" id="navLinks">
+        <a href="contact.html" class="nav-link">Contact Us</a>
+        <div class="nav-session">
+          <a href="login.html" class="nav-btn nav-btn--ghost">Login</a>
+          <a href="register.html" class="nav-btn nav-btn--solid">Register</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page-main">
+    <div class="info-box" id="verifyBox">
+      <div class="info-box-icon" id="verifyIcon">⏳</div>
+      <h2 id="verifyTitle">Verifying…</h2>
+      <!-- session.js populates #verifyMessage -->
+      <p id="verifyMessage">Please wait while we verify your email.</p>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Daily Activity Monitor. All rights reserved.</p>
+  </footer>
+
+  <script src="session.js"></script>
+  <script src="main.js"></script>
+  <script>
+    // session.js handleVerificationToken() runs automatically.
+    // After it runs, update the icon + title based on the result.
+    document.addEventListener('DOMContentLoaded', function () {
+      setTimeout(function () {
+        var msg = document.getElementById('verifyMessage').textContent || '';
+        var icon  = document.getElementById('verifyIcon');
+        var title = document.getElementById('verifyTitle');
+        if (msg.indexOf('✅') !== -1) {
+          icon.textContent  = '✅';
+          title.textContent = 'Email Verified!';
+          // Clean up session storage
+          sessionStorage.removeItem('dam_pending_email');
+          sessionStorage.removeItem('dam_pending_token');
+        } else {
+          icon.textContent  = '⚠️';
+          title.textContent = 'Verification Failed';
+        }
+      }, 300);
+    });
+  </script>
+</body>
+</html>

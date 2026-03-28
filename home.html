@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#FFFFFF" />
+  <title>Home — Daily Activity Monitor</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Home page specific styles ───────────────────── */
+    .home-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .home-action-card {
+      background: var(--color-surface);
+      border: 1.5px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 2rem 1.75rem;
+      text-decoration: none;
+      color: var(--color-ink);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .home-action-card:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-4px);
+      border-color: var(--color-accent-mid);
+      text-decoration: none;
+      color: var(--color-ink);
+    }
+
+    .home-action-icon  { font-size: 2rem; margin-bottom: 0.25rem; }
+
+    .home-action-title {
+      font-family: var(--font-heading);
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--color-ink);
+    }
+
+    .home-action-desc {
+      font-size: 0.88rem;
+      color: var(--color-ink-muted);
+      line-height: 1.6;
+      flex: 1;
+    }
+
+    .home-action-cta {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--color-accent-mid);
+      margin-top: 0.4rem;
+    }
+
+    /* ── My Groups section ───────────────────────────── */
+    .my-groups-section {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 1.75rem 2rem 2rem;
+    }
+
+    .my-groups-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+    }
+
+    .my-groups-title {
+      font-family: var(--font-heading);
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--color-ink);
+    }
+
+    .my-groups-count {
+      font-size: 0.82rem;
+      color: var(--color-ink-light);
+      font-weight: 500;
+    }
+
+    .groups-empty {
+      text-align: center;
+      padding: 2.5rem 1rem;
+      color: var(--color-ink-muted);
+    }
+
+    .groups-empty-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+
+    /* Inline group row list on home page */
+    .group-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.85rem 0;
+      border-bottom: 1px solid var(--color-border);
+      gap: 0.75rem;
+    }
+
+    .group-row:last-child { border-bottom: none; }
+
+    .group-row-left { display: flex; align-items: center; gap: 0.75rem; }
+
+    .group-row-icon {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      background: var(--color-accent-light);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+
+    .group-row-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--color-ink);
+    }
+
+    .group-row-meta {
+      font-size: 0.78rem;
+      color: var(--color-ink-light);
+      margin-top: 1px;
+    }
+
+    .group-row-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 9px;
+      border-radius: 99px;
+      flex-shrink: 0;
+    }
+
+    .group-row-badge--admin  { background: #D5F5E3; color: #1E8449; }
+    .group-row-badge--member { background: var(--color-accent-light); color: var(--color-accent); }
+
+    .view-all-link {
+      display: block;
+      text-align: center;
+      margin-top: 1.25rem;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--color-accent-mid);
+    }
+
+    @media (max-width: 640px) {
+      .home-actions { grid-template-columns: 1fr; }
+      .my-groups-section { padding: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="navbar" id="navbar">
+    <div class="navbar-inner">
+      <div class="nav-brand"><a href="home.html">Daily Activity Monitor</a></div>
+      <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="nav-links" id="navLinks">
+        <a href="group-dashboard.html" class="nav-link">Group Dashboard</a>
+        <a href="personal-dashboard.html" class="nav-link">My Dashboard</a>
+        <a href="contact.html" class="nav-link">Contact Us</a>
+        <div class="nav-session">
+          <!-- Rendered by session.js -->
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page-main">
+
+    <div class="page-header">
+      <h1 class="page-title" id="welcomeTitle">Welcome Back 👋</h1>
+      <p class="page-subtitle" id="welcomeSubtitle">What would you like to do today?</p>
+    </div>
+
+    <!-- Action cards -->
+    <section class="home-actions">
+      <a href="create-group.html" class="home-action-card">
+        <div class="home-action-icon">➕</div>
+        <div class="home-action-title">Create Group</div>
+        <div class="home-action-desc">Start a new group for family, friends, or a team. Add members and coordinate schedules together.</div>
+        <span class="home-action-cta">Get started →</span>
+      </a>
+      <a href="join-group.html" class="home-action-card">
+        <div class="home-action-icon">🤝</div>
+        <div class="home-action-title">Join Existing Group</div>
+        <div class="home-action-desc">Already been invited? Enter your invite code to join an existing group.</div>
+        <span class="home-action-cta">Join now →</span>
+      </a>
+    </section>
+
+    <!-- My Groups -->
+    <section class="my-groups-section">
+      <div class="my-groups-header">
+        <div class="my-groups-title">My Groups</div>
+        <span class="my-groups-count" id="groupsCount"></span>
+      </div>
+      <div id="groupsList">
+        <div class="groups-empty">
+          <div class="groups-empty-icon">📭</div>
+          <p>You haven't joined or created any groups yet.</p>
+          <p style="font-size:0.85rem; color:var(--color-ink-light); margin-top:0.4rem;">Use the cards above to get started.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Daily Activity Monitor. All rights reserved.</p>
+  </footer>
+
+  <script src="session.js"></script>
+  <script src="main.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+
+      var user = DAMSession.getUser();
+      if (!user) return; // session.js redirects
+
+      // Personalise greeting
+      document.getElementById('welcomeTitle').textContent =
+        'Welcome Back, ' + user.firstName + ' 👋';
+      document.getElementById('welcomeSubtitle').textContent =
+        'Here\'s a summary of your activity for today.';
+
+      // Load groups
+      var allGroups = [];
+      try { allGroups = JSON.parse(localStorage.getItem('dam_groups') || '[]'); }
+      catch (e) { allGroups = []; }
+
+      var userFullName = (user.firstName + ' ' + user.lastName).toLowerCase();
+      var userEmail    = user.email.toLowerCase();
+
+      var myGroups = allGroups.filter(function (g) {
+        if (g.admin && g.admin.toLowerCase() === userFullName) return true;
+        if (g.members && g.members.some(function (m) {
+          return m.email && m.email.toLowerCase() === userEmail;
+        })) return true;
+        return false;
+      });
+
+      var countEl = document.getElementById('groupsCount');
+      var listEl  = document.getElementById('groupsList');
+
+      if (myGroups.length === 0) {
+        countEl.textContent = '0 groups';
+        return; // keep the empty state
+      }
+
+      countEl.textContent = myGroups.length + ' group' + (myGroups.length !== 1 ? 's' : '');
+
+      // Render rows (show max 5, then a "View all" link)
+      var displayed = myGroups.slice(0, 5);
+      var html = displayed.map(function (g) {
+        var isAdmin = g.admin && g.admin.toLowerCase() === userFullName;
+        var memberCount = (g.members || []).length;
+        var initials = g.name.charAt(0).toUpperCase();
+        return [
+          '<div class="group-row">',
+            '<div class="group-row-left">',
+              '<div class="group-row-icon">' + initials + '</div>',
+              '<div>',
+                '<div class="group-row-name">' + escHtml(g.name) + '</div>',
+                '<div class="group-row-meta">',
+                  memberCount + ' member' + (memberCount !== 1 ? 's' : ''),
+                '</div>',
+              '</div>',
+            '</div>',
+            '<span class="group-row-badge ' +
+              (isAdmin ? 'group-row-badge--admin' : 'group-row-badge--member') + '">',
+              isAdmin ? '★ Admin' : 'Member',
+            '</span>',
+          '</div>'
+        ].join('');
+      }).join('');
+
+      if (myGroups.length > 5) {
+        html += '<a href="group-dashboard.html" class="view-all-link">View all ' +
+          myGroups.length + ' groups →</a>';
+      }
+
+      listEl.innerHTML = html;
+
+      function escHtml(s) {
+        return String(s)
+          .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+          .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      }
+    });
+  </script>
+</body>
+</html>
