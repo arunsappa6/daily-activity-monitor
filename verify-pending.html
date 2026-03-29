@@ -44,9 +44,31 @@
         You only need to do this <strong>once</strong>. After verifying you can log in on any device.
       </p>
 
-      <p style="margin-top:1.5rem; font-size:0.85rem; color:var(--color-ink-light);">
-        Didn't receive the email? Check your spam folder or
-        <a href="register.html">register again</a>.
+      <!-- Resend email section -->
+      <div style="margin-top:1.5rem; padding:1.25rem; background:var(--color-surface-2);
+                  border:1px solid var(--color-border); border-radius:var(--radius-md); text-align:left;">
+        <p style="font-size:0.9rem; font-weight:600; color:var(--color-ink); margin-bottom:0.4rem;">
+          Didn't receive the email?
+        </p>
+        <p style="font-size:0.85rem; color:var(--color-ink-muted); margin-bottom:0.85rem;">
+          Check your spam/junk folder first. If it's not there, click below to resend.
+        </p>
+        <button type="button" id="resendBtn" class="btn--submit"
+                style="margin-top:0; max-width:220px; font-size:0.9rem;">
+          Resend Verification Email
+        </button>
+        <div id="resendSuccess" style="display:none; margin-top:0.75rem;
+             font-size:0.85rem; color:var(--color-green); font-weight:600;">
+          ✅ Email resent! Check your inbox and spam folder.
+        </div>
+        <div id="resendError" style="display:none; margin-top:0.75rem;
+             font-size:0.85rem; color:#C0392B; font-weight:600;">
+          ⚠ Could not resend. Please try registering again.
+        </div>
+      </div>
+
+      <p style="margin-top:1rem; font-size:0.82rem; color:var(--color-ink-light);">
+        Still having trouble? <a href="register.html">Start registration again</a>.
       </p>
     </div>
   </main>
@@ -60,9 +82,63 @@
   <script src="session.js"></script>
   <script src="main.js"></script>
   <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      var email = sessionStorage.getItem('dam_pending_email') || 'your email address';
-      document.getElementById('pendingEmail').textContent = email;
+    document.addEventListener('DOMContentLoaded', async function () {
+      var email = sessionStorage.getItem('dam_pending_email') || '';
+      document.getElementById('pendingEmail').textContent = email || 'your email address';
+
+      var resendBtn     = document.getElementById('resendBtn');
+      var resendSuccess = document.getElementById('resendSuccess');
+      var resendError   = document.getElementById('resendError');
+      var resendCount   = 0;
+
+      resendBtn.addEventListener('click', async function () {
+        if (!email) {
+          resendError.style.display = 'block';
+          return;
+        }
+
+        /* Limit to 3 resends per session */
+        if (resendCount >= 3) {
+          resendError.textContent = '⚠ Maximum resend attempts reached. Please try registering again.';
+          resendError.style.display = 'block';
+          resendBtn.disabled = true;
+          return;
+        }
+
+        resendBtn.textContent = 'Resending…';
+        resendBtn.disabled    = true;
+        resendSuccess.style.display = 'none';
+        resendError.style.display   = 'none';
+
+        /* Build the correct verify URL for this deployment */
+        var verifyUrl = window.location.href
+          .replace(/\/[^\/]*$/, '/verify.html')
+          .split('?')[0];
+
+        var result = await _supabaseClient.auth.resend({
+          type: 'signup',
+          email: email,
+          options: { emailRedirectTo: verifyUrl }
+        });
+
+        resendBtn.textContent = 'Resend Verification Email';
+        resendBtn.disabled    = false;
+
+        if (result.error) {
+          resendError.textContent = '⚠ ' + result.error.message;
+          resendError.style.display = 'block';
+        } else {
+          resendCount++;
+          resendSuccess.style.display = 'block';
+          /* Grey out button for 30s to prevent spam */
+          resendBtn.disabled = true;
+          resendBtn.textContent = 'Resent ✓ (wait 30s)';
+          setTimeout(function () {
+            resendBtn.disabled    = false;
+            resendBtn.textContent = 'Resend Verification Email';
+          }, 30000);
+        }
+      });
     });
   </script>
 </body>

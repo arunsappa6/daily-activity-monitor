@@ -1,0 +1,598 @@
+/* ═══════════════════════════════════════════════════════════
+   DAILY ACTIVITY MONITOR — group-dashboard.js
+   Handles: group list, 5-day calendar, activity CRUD,
+            join group modal, admin approval requests
+   ═══════════════════════════════════════════════════════════ */
+
+/* Activity emoji map */
+var ACTIVITY_ICONS = {
+  'Cycling':       '🚴', 'Jogging':       '🏃',
+  'Reading':       '📚', 'Gardening':     '🌱',
+  'Breakfast Prep':'🍳', 'Lunch Prep':    '🥗',
+  'Dinner Prep':   '🍽️', 'Hydration':    '💧',
+  'Personal Care': '🧴', 'Work':          '💼',
+  'Drop kids':     '🚗', 'Pick-up kids':  '🏫',
+  'Learning':      '📖', 'Commute':       '🚌'
+};
+
+var currentUser    = null;
+var currentProfile = null;
+var myGroups       = [];
+var selectedGroup  = null;
+var calWeekOffset  = 0;   // 0 = current week
+var activitiesCache= {};  // key: groupId-YYYY-MM-DD
+var allGroupNames  = [];  // for autocomplete
+
+document.addEventListener('DOMContentLoaded', async function () {
+
+  /* ── Wait for session ─────────────────────────────────── */
+  await new Promise(function (r) { setTimeout(r, 500); });
+  var sessionResult = await DAM.auth().getSession();
+  var session = sessionResult.data && sessionResult.data.session ? sessionResult.data.session : null;
+  currentUser = session ? session.user : null;
+  if (!currentUser) return;
+
+  /* ── Get profile ──────────────────────────────────────── */
+  var pRes = await DAM.db().from('profiles')
+    .select('first_name, last_name, is_admin')
+    .eq('id', currentUser.id).single();
+  currentProfile = pRes.data || {};
+
+  /* ── Load all groups (for autocomplete + display) ─────── */
+  var allGroupsRes = await DAM.db().from('groups').select('id, name, created_by, created_at');
+  allGroupNames = allGroupsRes.data || [];
+
+  /* ── Load groups I'm part of ──────────────────────────── */
+  await loadMyGroups();
+
+  /* ── Load admin pending requests ─────────────────────── */
+  await loadPendingRequests();
+
+  /* ── Calendar navigation ──────────────────────────────── */
+  document.getElementById('calPrev').addEventListener('click', function () {
+    calWeekOffset--; renderCalendar();
+  });
+  document.getElementById('calNext').addEventListener('click', function () {
+    calWeekOffset++; renderCalendar();
+  });
+
+  /* ── Join Group modal ──────────────────────────────────── */
+  setupJoinModal();
+
+  /* ── Activity modal ────────────────────────────────────── */
+  setupActivityModal();
+
+  /* ── View Day modal ────────────────────────────────────── */
+  document.getElementById('closeViewDayBtn').addEventListener('click', function () {
+    document.getElementById('viewDayModal').classList.remove('is-open');
+  });
+  document.getElementById('viewDayModal').addEventListener('click', function (e) {
+    if (e.target === this) this.classList.remove('is-open');
+  });
+
+});
+
+/* ── Load groups the current user created or is a member of */
+async function loadMyGroups() {
+  var listEl = document.getElementById('groupList');
+  var subtitleEl = document.getElementById('groupSubtitle');
+
+  /* Groups I created */
+  var createdRes = await DAM.db()
+    .from('groups').select('id, name, created_at, created_by')
+    .eq('created_by', currentUser.id);
+
+  /* Groups where my email is listed as a member AND request was accepted */
+  var memberRes = await DAM.db()
+    .from('group_join_requests')
+    .select('group_id, group_name')
+    .eq('email', currentUser.email)
+    .eq('status', 'accepted');
+
+  var memberGroupIds = (memberRes.data || []).map(function (r) { return r.group_id; });
+
+  var memberGroups = [];
+  if (memberGroupIds.length > 0) {
+    var mgRes = await DAM.db()
+      .from('groups').select('id, name, created_at, created_by')
+      .in('id', memberGroupIds);
+    memberGroups = mgRes.data || [];
+  }
+
+  /* Merge, deduplicate */
+  var created = createdRes.data || [];
+  var allMy = created.slice();
+  memberGroups.forEach(function (g) {
+    if (!allMy.find(function (x) { return x.id === g.id; })) allMy.push(g);
+  });
+  myGroups = allMy;
+
+  subtitleEl.textContent = myGroups.length > 0
+    ? 'You are part of ' + myGroups.length + ' group' + (myGroups.length !== 1 ? 's' : '') + '.'
+    : 'You have not joined or created any groups yet.';
+
+  if (myGroups.length === 0) {
+    listEl.innerHTML = '<p style="font-size:0.85rem; color:var(--color-ink-light); font-style:italic; padding:0.5rem 0;">No groups yet. Create or join one!</p>';
+    return;
+  }
+
+  listEl.innerHTML = '';
+  myGroups.forEach(function (g) {
+    var isAdmin = g.created_by === currentUser.id;
+    var initial = (g.name || '?').charAt(0).toUpperCase();
+    var btn = document.createElement('button');
+    btn.className = 'group-list-item';
+    btn.innerHTML = [
+      '<div class="group-list-icon">' + initial + '</div>',
+      '<span class="group-list-name">' + esc(g.name) + '</span>',
+      isAdmin ? '<span class="group-list-badge">Admin</span>' : ''
+    ].join('');
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.group-list-item').forEach(function (el) { el.classList.remove('active'); });
+      btn.classList.add('active');
+      selectGroup(g);
+    });
+    listEl.appendChild(btn);
+  });
+}
+
+/* ── Select a group and show its calendar ─────────────────*/
+function selectGroup(group) {
+  selectedGroup = group;
+  calWeekOffset = 0;
+  document.getElementById('calPanelEmpty').style.display  = 'none';
+  document.getElementById('calendarWrap').style.display   = 'block';
+  document.getElementById('calGroupTitle').textContent    = group.name;
+  renderCalendar();
+}
+
+/* ── 5-Day Calendar Renderer ──────────────────────────────*/
+async function renderCalendar() {
+  var root = document.getElementById('calendarRoot');
+  root.innerHTML = '<p style="padding:1rem; color:var(--color-ink-muted);">Loading schedule…</p>';
+
+  /* Calculate 5 days starting from Monday of the selected week */
+  var today = new Date();
+  var monday = new Date(today);
+  var dayOfWeek = today.getDay() || 7; // make Sunday = 7
+  monday.setDate(today.getDate() - dayOfWeek + 1 + (calWeekOffset * 5));
+
+  var days = [];
+  for (var i = 0; i < 5; i++) {
+    var d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    days.push(d);
+  }
+
+  var todayStr = toDateStr(today);
+
+  /* Fetch activities for this group for these 5 days */
+  var dateFrom = toDateStr(days[0]);
+  var dateTo   = toDateStr(days[4]);
+
+  var actRes = await DAM.db()
+    .from('activities')
+    .select('*')
+    .eq('group_id', selectedGroup.id)
+    .gte('activity_date', dateFrom)
+    .lte('activity_date', dateTo)
+    .order('from_time');
+
+  var acts = actRes.data || [];
+
+  /* Build calendar HTML */
+  var headerHtml = '<div class="cal5-header">';
+  var bodyHtml   = '<div class="cal5-grid">';
+
+  var weekdays = ['Mon','Tue','Wed','Thu','Fri'];
+
+  days.forEach(function (d, i) {
+    var ds = toDateStr(d);
+    var isToday = ds === todayStr;
+    headerHtml += '<div class="cal5-header-cell' + (isToday ? ' today' : '') + '">' +
+      weekdays[i] + ' ' + d.getDate() + '/' + (d.getMonth()+1) +
+    '</div>';
+  });
+  headerHtml += '</div>';
+
+  days.forEach(function (d) {
+    var ds = toDateStr(d);
+    var isToday = ds === todayStr;
+    var dayActs = acts.filter(function (a) { return a.activity_date === ds; });
+
+    var chips = '';
+    var maxShow = 3;
+    dayActs.slice(0, maxShow).forEach(function (a) {
+      var icon = ACTIVITY_ICONS[a.activity] || '📌';
+      chips += '<div class="cal5-activity" data-id="' + a.id + '" onclick="openEditActivity(event,\'' + ds + '\',\'' + a.id + '\')">' +
+        '<span class="cal5-activity-icon">' + icon + '</span>' +
+        '<span class="cal5-activity-text">' + esc(a.activity) + '</span>' +
+      '</div>';
+    });
+    if (dayActs.length > maxShow) {
+      chips += '<div class="cal5-more">+' + (dayActs.length - maxShow) + ' more</div>';
+    }
+
+    bodyHtml += '<div class="cal5-cell' + (isToday ? ' today' : '') + '" onclick="openViewDay(\'' + ds + '\')">' +
+      '<div class="cal5-day-num' + (isToday ? ' today-num' : '') + '">' +
+        '<span>' + d.getDate() + '</span>' +
+        '<div class="cal5-controls">' +
+          '<button class="cal5-btn plus" title="Add activity" onclick="event.stopPropagation(); openAddActivity(\'' + ds + '\')"  >+</button>' +
+          '<button class="cal5-btn minus" title="Edit/Remove" onclick="event.stopPropagation(); openViewDay(\'' + ds + '\')"   >−</button>' +
+        '</div>' +
+      '</div>' +
+      chips +
+    '</div>';
+  });
+
+  bodyHtml += '</div>';
+
+  root.innerHTML = headerHtml + bodyHtml;
+}
+
+/* ── Add Activity Modal ────────────────────────────────── */
+var pendingDate = null;
+var editingActivityId = null;
+
+function openAddActivity(dateStr) {
+  pendingDate = dateStr;
+  editingActivityId = null;
+  document.getElementById('addActivityTitle').textContent = 'Add Activity';
+  document.getElementById('addActivityDate').textContent  = formatDisplayDate(dateStr);
+  document.getElementById('activityType').value     = '';
+  document.getElementById('activityFrom').value     = '';
+  document.getElementById('activityEnd').value      = '';
+  document.getElementById('activityLocation').value = '';
+  ['activityTypeErr','activityFromErr','activityEndErr','activityGenErr'].forEach(function (id) {
+    document.getElementById(id).classList.remove('visible');
+  });
+  document.getElementById('addActivityModal').classList.add('is-open');
+}
+
+function openEditActivity(event, dateStr, actId) {
+  event.stopPropagation();
+  openViewDay(dateStr);
+}
+
+function setupActivityModal() {
+  document.getElementById('cancelActivityBtn').addEventListener('click', function () {
+    document.getElementById('addActivityModal').classList.remove('is-open');
+  });
+  document.getElementById('addActivityModal').addEventListener('click', function (e) {
+    if (e.target === this) this.classList.remove('is-open');
+  });
+
+  document.getElementById('saveActivityBtn').addEventListener('click', async function () {
+    var type  = document.getElementById('activityType').value;
+    var from  = document.getElementById('activityFrom').value;
+    var end   = document.getElementById('activityEnd').value;
+    var loc   = document.getElementById('activityLocation').value.trim();
+
+    var valid = true;
+    document.getElementById('activityGenErr').classList.remove('visible');
+
+    if (!type) { document.getElementById('activityTypeErr').classList.add('visible'); valid = false; }
+    else        { document.getElementById('activityTypeErr').classList.remove('visible'); }
+    if (!from)  { document.getElementById('activityFromErr').classList.add('visible'); valid = false; }
+    else        { document.getElementById('activityFromErr').classList.remove('visible'); }
+    if (!end)   { document.getElementById('activityEndErr').classList.add('visible'); valid = false; }
+    else        { document.getElementById('activityEndErr').classList.remove('visible'); }
+    if (from && end && from >= end) {
+      document.getElementById('activityGenErr').classList.add('visible'); valid = false;
+    }
+    if (!valid) return;
+
+    var btn = document.getElementById('saveActivityBtn');
+    btn.textContent = 'Saving…'; btn.disabled = true;
+
+    var payload = {
+      user_id:       currentUser.id,
+      group_id:      selectedGroup ? selectedGroup.id : null,
+      activity:      type,
+      activity_date: pendingDate,
+      from_time:     from,
+      end_time:      end,
+      location:      loc || null,
+      is_group:      !!selectedGroup
+    };
+
+    var res = await DAM.db().from('activities').insert(payload);
+
+    btn.textContent = 'Save Activity'; btn.disabled = false;
+
+    if (res.error) {
+      alert('Error saving activity: ' + res.error.message); return;
+    }
+
+    document.getElementById('addActivityModal').classList.remove('is-open');
+    if (selectedGroup) renderCalendar();
+  });
+}
+
+/* ── View Day Schedule Modal ──────────────────────────────*/
+async function openViewDay(dateStr) {
+  var modal   = document.getElementById('viewDayModal');
+  var listEl  = document.getElementById('viewDayList');
+  var titleEl = document.getElementById('viewDayTitle');
+
+  titleEl.textContent = formatDisplayDate(dateStr);
+  listEl.innerHTML    = '<p style="color:var(--color-ink-muted); font-size:0.9rem;">Loading…</p>';
+  modal.classList.add('is-open');
+
+  /* Fetch activities for this date + group */
+  var query = DAM.db().from('activities')
+    .select('*')
+    .eq('activity_date', dateStr)
+    .order('from_time');
+
+  if (selectedGroup) query = query.eq('group_id', selectedGroup.id);
+  else               query = query.eq('user_id', currentUser.id);
+
+  var res = await query;
+  var acts = res.data || [];
+
+  if (acts.length === 0) {
+    listEl.innerHTML = '<p style="color:var(--color-ink-muted); font-size:0.9rem; padding:0.5rem 0;">No activities scheduled for this day.</p>';
+    return;
+  }
+
+  listEl.innerHTML = acts.map(function (a) {
+    var icon = ACTIVITY_ICONS[a.activity] || '📌';
+    var fromFmt = fmt12h(a.from_time);
+    var endFmt  = fmt12h(a.end_time);
+    var loc     = a.location ? ' — ' + esc(a.location) : '';
+    return [
+      '<div class="schedule-item">',
+        '<div class="schedule-item-icon">' + icon + '</div>',
+        '<div class="schedule-item-body">',
+          '<div class="schedule-item-name">' + esc(a.activity) + '</div>',
+          '<div class="schedule-item-time">' + fromFmt + ' to ' + endFmt + loc + '</div>',
+        '</div>',
+        '<button onclick="deleteActivity(\'' + a.id + '\',\'' + dateStr + '\')" ' +
+          'style="background:none; border:none; cursor:pointer; color:#E74C3C; font-size:1rem; padding:0.25rem;" title="Remove">🗑</button>',
+      '</div>'
+    ].join('');
+  }).join('');
+}
+
+async function deleteActivity(actId, dateStr) {
+  if (!confirm('Remove this activity?')) return;
+  await DAM.db().from('activities').delete().eq('id', actId);
+  openViewDay(dateStr);
+  if (selectedGroup) renderCalendar();
+}
+
+/* ── Join Group Modal ─────────────────────────────────── */
+function setupJoinModal() {
+  var modal       = document.getElementById('joinModal');
+  var openBtn     = document.getElementById('joinGroupBtn');
+  var cancelBtn   = document.getElementById('cancelJoinBtn');
+  var submitBtn   = document.getElementById('submitJoinBtn');
+  var nameInput   = document.getElementById('joinGroupName');
+  var suggestBox  = document.getElementById('groupSuggestions');
+
+  openBtn.addEventListener('click', function () {
+    modal.classList.add('is-open');
+    document.getElementById('joinGroupName').value = '';
+    document.getElementById('joinReason').value    = '';
+    document.getElementById('joinRelationship').value = '';
+    document.getElementById('joinSuccessMsg').style.display = 'none';
+    document.getElementById('joinModal').querySelector('.modal-form').style.display = 'block';
+    document.getElementById('joinModal').querySelector('.modal-actions').style.display = 'flex';
+    ['joinGroupNameErr','joinRelationshipErr','joinGeneralErr'].forEach(function (id) {
+      document.getElementById(id).classList.remove('visible');
+    });
+    nameInput.focus();
+  });
+
+  cancelBtn.addEventListener('click', function () { modal.classList.remove('is-open'); });
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) modal.classList.remove('is-open');
+  });
+
+  /* Autocomplete */
+  var focusIdx = -1;
+  nameInput.addEventListener('input', function () {
+    var q = this.value.trim().toLowerCase();
+    if (!q) { suggestBox.style.display = 'none'; return; }
+    var matches = allGroupNames.filter(function (g) {
+      return g.name.toLowerCase().includes(q);
+    });
+    if (matches.length === 0) { suggestBox.style.display = 'none'; return; }
+    focusIdx = -1;
+    suggestBox.innerHTML = matches.map(function (g, i) {
+      return '<div class="suggestion-item" data-id="' + g.id + '" data-name="' + esc(g.name) + '" data-idx="' + i + '">' + esc(g.name) + '</div>';
+    }).join('');
+    suggestBox.style.display = 'block';
+    suggestBox.querySelectorAll('.suggestion-item').forEach(function (item) {
+      item.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        nameInput.value = this.dataset.name;
+        suggestBox.style.display = 'none';
+      });
+    });
+  });
+
+  /* Keyboard navigation for suggestions */
+  nameInput.addEventListener('keydown', function (e) {
+    var items = suggestBox.querySelectorAll('.suggestion-item');
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault(); focusIdx = Math.min(focusIdx + 1, items.length - 1);
+      items.forEach(function (el, i) { el.classList.toggle('focused', i === focusIdx); });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault(); focusIdx = Math.max(focusIdx - 1, 0);
+      items.forEach(function (el, i) { el.classList.toggle('focused', i === focusIdx); });
+    } else if (e.key === 'Enter' && focusIdx >= 0) {
+      e.preventDefault();
+      nameInput.value = items[focusIdx].dataset.name;
+      suggestBox.style.display = 'none';
+    } else if (e.key === 'Escape') {
+      suggestBox.style.display = 'none';
+    }
+  });
+
+  nameInput.addEventListener('blur', function () {
+    setTimeout(function () { suggestBox.style.display = 'none'; }, 200);
+  });
+
+  /* Submit join request */
+  submitBtn.addEventListener('click', async function () {
+    var groupName    = nameInput.value.trim();
+    var relationship = document.getElementById('joinRelationship').value;
+    var reason       = document.getElementById('joinReason').value.trim();
+    var valid = true;
+
+    document.getElementById('joinGeneralErr').classList.remove('visible');
+
+    if (!groupName) {
+      document.getElementById('joinGroupNameErr').classList.add('visible'); valid = false;
+    } else { document.getElementById('joinGroupNameErr').classList.remove('visible'); }
+
+    if (!relationship) {
+      document.getElementById('joinRelationshipErr').classList.add('visible'); valid = false;
+    } else { document.getElementById('joinRelationshipErr').classList.remove('visible'); }
+
+    if (!valid) return;
+
+    /* Find matching group */
+    var matchedGroup = allGroupNames.find(function (g) {
+      return g.name.toLowerCase() === groupName.toLowerCase();
+    });
+
+    if (!matchedGroup) {
+      document.getElementById('joinGroupNameErr').textContent = '⚠ Group not found. Check the name and try again.';
+      document.getElementById('joinGroupNameErr').classList.add('visible'); return;
+    }
+
+    submitBtn.textContent = 'Submitting…'; submitBtn.disabled = true;
+
+    var payload = {
+      group_id:     matchedGroup.id,
+      requester_id: currentUser.id,
+      first_name:   currentProfile.first_name || '',
+      last_name:    currentProfile.last_name  || '',
+      email:        currentUser.email,
+      group_name:   matchedGroup.name,
+      reason:       reason || null,
+      relationship: relationship,
+      status:       'pending'
+    };
+
+    var res = await DAM.db().from('group_join_requests').insert(payload);
+
+    submitBtn.textContent = 'Submit Request'; submitBtn.disabled = false;
+
+    if (res.error) {
+      document.getElementById('joinGeneralErr').textContent = '⚠ ' + res.error.message;
+      document.getElementById('joinGeneralErr').classList.add('visible'); return;
+    }
+
+    modal.querySelector('.modal-form').style.display   = 'none';
+    modal.querySelector('.modal-actions').style.display = 'none';
+    document.getElementById('joinSuccessMsg').style.display = 'block';
+  });
+}
+
+/* ── Load pending requests (admin view) ─────────────────── */
+async function loadPendingRequests() {
+  /* Check if user is admin of any group */
+  var adminGroupsRes = await DAM.db()
+    .from('groups').select('id').eq('created_by', currentUser.id);
+  var adminGroupIds = (adminGroupsRes.data || []).map(function (g) { return g.id; });
+
+  if (adminGroupIds.length === 0) return;
+
+  document.getElementById('adminRequestsSection').style.display = 'block';
+
+  var reqRes = await DAM.db()
+    .from('group_join_requests')
+    .select('*')
+    .in('group_id', adminGroupIds)
+    .eq('status', 'pending')
+    .order('created_at');
+
+  var requests = reqRes.data || [];
+  var listEl   = document.getElementById('pendingRequestsList');
+
+  if (requests.length === 0) {
+    listEl.innerHTML = '<p style="font-size:0.88rem; color:var(--color-ink-muted);">No pending requests.</p>';
+    return;
+  }
+
+  listEl.innerHTML = requests.map(function (r) {
+    return [
+      '<div class="request-card" id="req-' + r.id + '">',
+        '<div class="request-info">',
+          '<div class="request-name">' + esc(r.first_name) + ' ' + esc(r.last_name) + '</div>',
+          '<div class="request-email">' + esc(r.email) + '</div>',
+          '<div class="request-group">Wants to join: <strong>' + esc(r.group_name) + '</strong>',
+            (r.relationship ? ' &bull; ' + esc(r.relationship) : ''),
+          '</div>',
+          (r.reason ? '<div style="font-size:0.78rem; color:var(--color-ink-light); margin-top:2px;">Reason: ' + esc(r.reason) + '</div>' : ''),
+        '</div>',
+        '<div class="request-actions">',
+          '<button class="btn--accept" onclick="handleRequest(\'' + r.id + '\',\'accepted\',\'' + esc(r.first_name) + '\',\'' + esc(r.email) + '\',\'' + esc(r.group_name) + '\')">✓ Accept</button>',
+          '<button class="btn--deny"   onclick="handleRequest(\'' + r.id + '\',\'denied\',\'' + esc(r.first_name) + '\',\'' + esc(r.email) + '\',\'' + esc(r.group_name) + '\')">✕ Deny</button>',
+        '</div>',
+      '</div>'
+    ].join('');
+  }).join('');
+}
+
+async function handleRequest(reqId, status, firstName, email, groupName) {
+  var res = await DAM.db()
+    .from('group_join_requests')
+    .update({ status: status })
+    .eq('id', reqId);
+
+  if (res.error) { alert('Error: ' + res.error.message); return; }
+
+  /* Remove the card from UI */
+  var card = document.getElementById('req-' + reqId);
+  if (card) {
+    card.style.opacity = '0.4';
+    card.style.pointerEvents = 'none';
+    var label = card.querySelector('.request-actions');
+    if (label) label.innerHTML = '<span style="font-size:0.85rem; font-weight:600; color:' +
+      (status === 'accepted' ? 'var(--color-green)' : '#E74C3C') + ';">' +
+      (status === 'accepted' ? '✓ Accepted' : '✕ Denied') + '</span>';
+  }
+
+  /* Trigger Supabase Edge Function for email notification */
+  /* The Edge Function "send-group-email" handles the actual email send */
+  await DAM.db().rpc('notify_request_decision', {
+    p_email:      email,
+    p_first_name: firstName,
+    p_group_name: groupName,
+    p_status:     status
+  }).catch(function () {
+    /* RPC may not exist yet — see EDGE-FUNCTION-GUIDE.md */
+    console.info('Email notification RPC not yet configured. See EDGE-FUNCTION-GUIDE.md.');
+  });
+}
+
+/* ── Utility helpers ──────────────────────────────────── */
+function toDateStr(d) {
+  return d.getFullYear() + '-' +
+    String(d.getMonth()+1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0');
+}
+
+function formatDisplayDate(ds) {
+  var d = new Date(ds + 'T00:00:00');
+  return d.toLocaleDateString('en-CA', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+}
+
+function fmt12h(t) {
+  if (!t) return '';
+  var parts = t.split(':');
+  var h = parseInt(parts[0]); var m = parts[1];
+  var ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return h + ':' + m + ' ' + ampm;
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}

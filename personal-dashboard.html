@@ -11,104 +11,8 @@
   <meta name="theme-color" content="#FFFFFF" />
   <title>My Dashboard — Daily Activity Monitor</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="calendar.css" />
   <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
-  <style>
-    .profile-card {
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-lg);
-      padding: 2rem;
-      display: grid;
-      grid-template-columns: 72px 1fr;
-      gap: 1.5rem;
-      align-items: center;
-      margin-bottom: 2rem;
-    }
-
-    .profile-avatar {
-      width: 72px; height: 72px;
-      border-radius: 50%;
-      background: var(--color-accent);
-      color: #fff;
-      font-family: var(--font-heading);
-      font-size: 1.75rem;
-      font-weight: 700;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .profile-name {
-      font-family: var(--font-heading);
-      font-size: 1.4rem;
-      font-weight: 700;
-      color: var(--color-ink);
-      margin-bottom: 0.25rem;
-    }
-
-    .profile-email {
-      font-size: 0.88rem;
-      color: var(--color-ink-muted);
-    }
-
-    .profile-badge {
-      display: inline-block;
-      font-size: 0.72rem;
-      font-weight: 700;
-      padding: 2px 9px;
-      border-radius: 99px;
-      margin-top: 0.4rem;
-      background: #D5F5E3;
-      color: #1E8449;
-    }
-
-    .info-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem;
-      margin-bottom: 2rem;
-    }
-
-    .info-tile {
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      padding: 1.25rem 1.5rem;
-    }
-
-    .info-tile-label {
-      font-size: 0.72rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--color-ink-light);
-      margin-bottom: 0.35rem;
-    }
-
-    .info-tile-value {
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: var(--color-ink);
-      word-break: break-word;
-    }
-
-    .coming-soon-box {
-      background: var(--color-surface-2);
-      border: 1.5px dashed var(--color-border);
-      border-radius: var(--radius-md);
-      padding: 2.5rem;
-      text-align: center;
-      color: var(--color-ink-muted);
-      font-size: 0.92rem;
-    }
-
-    .coming-soon-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
-
-    @media (max-width: 640px) {
-      .profile-card  { grid-template-columns: 1fr; text-align: center; }
-      .profile-avatar { margin: 0 auto; }
-      .info-grid { grid-template-columns: 1fr; }
-    }
-  </style>
 </head>
 <body>
 
@@ -122,42 +26,43 @@
         <a href="group-dashboard.html" class="nav-link">Group Dashboard</a>
         <a href="personal-dashboard.html" class="nav-link nav-link--active">My Dashboard</a>
         <a href="contact.html" class="nav-link">Contact Us</a>
-        <div class="nav-session">
-          <!-- Rendered by session.js -->
-        </div>
+        <div class="nav-session"><!-- session.js --></div>
       </nav>
     </div>
   </header>
 
-  <main class="page-main">
+  <main class="page-main" style="max-width:1000px;">
 
-    <div class="page-header">
-      <h1 class="page-title">My Dashboard</h1>
-      <p class="page-subtitle">Your profile and personal activity overview.</p>
-    </div>
-
-    <!-- Profile card -->
-    <div class="profile-card" id="profileCard">
-      <div class="profile-avatar" id="profileAvatar">?</div>
-      <div>
-        <div class="profile-name"  id="profileName">—</div>
-        <div class="profile-email" id="profileEmail">—</div>
-        <span class="profile-badge" id="profileBadge">Verified ✓</span>
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem;">
+      <div class="page-header" style="margin-bottom:0; border:none; padding:0;">
+        <h1 class="page-title">My Dashboard</h1>
+        <p class="page-subtitle">Your personal activity schedule.</p>
+      </div>
+      <div style="display:flex; gap:0.5rem;">
+        <button class="cal-nav-btn" id="calPrev">‹ Prev</button>
+        <button class="cal-nav-btn" id="calNext">Next ›</button>
       </div>
     </div>
 
-    <!-- Account info tiles -->
-    <div class="info-grid" id="infoGrid">
-      <!-- Populated by JS -->
+    <!-- 5-day personal calendar -->
+    <div id="calendarRoot" style="margin-bottom:2rem;">
+      <p style="color:var(--color-ink-muted);">Loading your schedule…</p>
     </div>
 
-    <!-- Calendar placeholder -->
-    <div class="coming-soon-box">
-      <div class="coming-soon-icon">📅</div>
-      <p><strong>Personal Schedule Calendar</strong></p>
-      <p style="margin-top:0.4rem; font-size:0.85rem; color:var(--color-ink-light);">
-        Your personal activity calendar will appear here in a future update.
-      </p>
+    <!-- Quick profile summary -->
+    <div id="profileSummary" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem;">
+      <div class="info-tile" style="background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:1.1rem 1.25rem;">
+        <div class="detail-tile-label" style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--color-ink-light); margin-bottom:0.3rem;">Name</div>
+        <div id="pName" style="font-size:0.95rem; font-weight:600; color:var(--color-ink);">—</div>
+      </div>
+      <div class="info-tile" style="background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:1.1rem 1.25rem;">
+        <div class="detail-tile-label" style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--color-ink-light); margin-bottom:0.3rem;">Email</div>
+        <div id="pEmail" style="font-size:0.95rem; font-weight:600; color:var(--color-ink); word-break:break-all;">—</div>
+      </div>
+      <div class="info-tile" style="background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:1.1rem 1.25rem;">
+        <div class="detail-tile-label" style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--color-ink-light); margin-bottom:0.3rem;">Last Visit</div>
+        <div id="pLastVisit" style="font-size:0.95rem; font-weight:600; color:var(--color-ink);">—</div>
+      </div>
     </div>
 
   </main>
@@ -166,95 +71,78 @@
     <p>&copy; 2026 Daily Activity Monitor. All rights reserved.</p>
   </footer>
 
+  <!-- ══ ADD ACTIVITY MODAL ════════════════════════════════ -->
+  <div class="modal-overlay" id="addActivityModal" role="dialog" aria-modal="true">
+    <div class="modal-box" style="max-width:460px;">
+      <div class="modal-title">Add Activity</div>
+      <div class="modal-subtitle" id="addActivityDate"></div>
+      <div class="modal-form">
+        <div class="form-group">
+          <label for="activityType">Activity <span class="required">*</span></label>
+          <div class="select-wrapper">
+            <select id="activityType">
+              <option value="">— Select Activity —</option>
+              <option value="Cycling">🚴 Cycling</option>
+              <option value="Jogging">🏃 Jogging</option>
+              <option value="Reading">📚 Reading</option>
+              <option value="Gardening">🌱 Gardening</option>
+              <option value="Breakfast Prep">🍳 Breakfast Prep</option>
+              <option value="Lunch Prep">🥗 Lunch Prep</option>
+              <option value="Dinner Prep">🍽️ Dinner Prep</option>
+              <option value="Hydration">💧 Hydration</option>
+              <option value="Personal Care">🧴 Personal Care</option>
+              <option value="Work">💼 Work</option>
+              <option value="Drop kids">🚗 Drop kids</option>
+              <option value="Pick-up kids">🏫 Pick-up kids</option>
+              <option value="Learning">📖 Learning</option>
+              <option value="Commute">🚌 Commute</option>
+            </select>
+          </div>
+          <span class="field-error" id="activityTypeErr">⚠ Please select an activity.</span>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+          <div class="form-group">
+            <label for="activityFrom">From Time <span class="required">*</span></label>
+            <input type="time" id="activityFrom" />
+            <span class="field-error" id="activityFromErr">⚠ Required.</span>
+          </div>
+          <div class="form-group">
+            <label for="activityEnd">End Time <span class="required">*</span></label>
+            <input type="time" id="activityEnd" />
+            <span class="field-error" id="activityEndErr">⚠ Required.</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="activityLocation">Location</label>
+          <input type="text" id="activityLocation" placeholder="e.g. Home, Toronto YMCA" />
+        </div>
+        <div class="field-error" id="activityGenErr">⚠ End time must be after start time.</div>
+      </div>
+      <div class="modal-actions" style="margin-top:1.25rem;">
+        <button type="button" class="btn--cancel" id="cancelActivityBtn">Cancel</button>
+        <button type="button" class="btn--submit" id="saveActivityBtn" style="margin-top:0;">Save Activity</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ VIEW DAY SCHEDULE MODAL ══════════════════════════ -->
+  <div class="modal-overlay" id="viewDayModal" role="dialog" aria-modal="true">
+    <div class="modal-box" style="max-width:500px; background:#F0F0F0;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <div class="modal-title" id="viewDayTitle">Schedule</div>
+        <button type="button" class="btn--cancel" id="closeViewDayBtn"
+                style="padding:0.35rem 0.75rem; font-size:0.85rem;">✕ Close</button>
+      </div>
+      <div id="viewDayList" style="display:flex; flex-direction:column; gap:0.6rem; min-height:80px;">
+        <p style="color:var(--color-ink-muted); font-size:0.9rem;">No activities scheduled.</p>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="supabase-config.js"></script>
   <script src="session.js"></script>
   <script src="main.js"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-
-      var user = DAMSession.getUser();
-      if (!user) return; // session.js handles redirect
-
-      // Avatar initials
-      var initials = (user.firstName.charAt(0) + user.lastName.charAt(0)).toUpperCase();
-      document.getElementById('profileAvatar').textContent = initials;
-      document.getElementById('profileName').textContent   = user.firstName + ' ' + user.lastName;
-      document.getElementById('profileEmail').textContent  = user.email;
-
-      // Admin badge
-      if (user.isAdmin) {
-        document.getElementById('profileBadge').textContent = 'Admin ★';
-        document.getElementById('profileBadge').style.background = '#D5F5E3';
-      }
-
-      // Groups count
-      var allGroups = [];
-      try { allGroups = JSON.parse(localStorage.getItem('dam_groups') || '[]'); }
-      catch (e) {}
-
-      var userFullName = (user.firstName + ' ' + user.lastName).toLowerCase();
-      var myGroupCount = allGroups.filter(function (g) {
-        if (g.admin && g.admin.toLowerCase() === userFullName) return true;
-        if (g.members && g.members.some(function (m) {
-          return m.email && m.email.toLowerCase() === user.email.toLowerCase();
-        })) return true;
-        return false;
-      }).length;
-
-      // Format DOB nicely
-      var dobDisplay = '—';
-      if (user.dob) {
-        try {
-          var parts = user.dob.split('-');
-          var d = new Date(parts[0], parts[1] - 1, parts[2]);
-          dobDisplay = d.toLocaleDateString('en-CA', { year:'numeric', month:'long', day:'numeric' });
-        } catch (e) { dobDisplay = user.dob; }
-      }
-
-      // Address
-      var addressParts = [];
-      if (user.aptUnit)      addressParts.push(user.aptUnit);
-      if (user.streetNumber) addressParts.push(user.streetNumber);
-      if (user.streetName)   addressParts.push(user.streetName);
-      if (user.province)     addressParts.push(user.province.split('—')[1] || user.province);
-      if (user.country)      addressParts.push(user.country);
-      if (user.postalCode)   addressParts.push(user.postalCode);
-      var addressDisplay = addressParts.join(', ') || '—';
-
-      // Registered date
-      var regDisplay = '—';
-      if (user.registeredAt) {
-        try {
-          regDisplay = new Date(user.registeredAt).toLocaleDateString('en-CA', {
-            year:'numeric', month:'long', day:'numeric'
-          });
-        } catch (e) {}
-      }
-
-      var tiles = [
-        { label: 'Date of Birth',    value: dobDisplay },
-        { label: 'Phone Number',     value: user.phone ? ('+' + user.phone) : '—' },
-        { label: 'Address',          value: addressDisplay },
-        { label: 'Country',          value: user.country || '—' },
-        { label: 'Member Since',     value: regDisplay },
-        { label: 'Groups',           value: myGroupCount + ' group' + (myGroupCount !== 1 ? 's' : '') }
-      ];
-
-      document.getElementById('infoGrid').innerHTML = tiles.map(function (t) {
-        return [
-          '<div class="info-tile">',
-            '<div class="info-tile-label">' + t.label + '</div>',
-            '<div class="info-tile-value">' + escHtml(String(t.value)) + '</div>',
-          '</div>'
-        ].join('');
-      }).join('');
-
-      function escHtml(s) {
-        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;')
-                .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-      }
-    });
-  </script>
+  <script src="personal-dashboard.js"></script>
 </body>
 </html>

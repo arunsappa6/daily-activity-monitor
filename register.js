@@ -69,6 +69,30 @@ document.addEventListener('DOMContentLoaded', function () {
   /* ── Helpers ────────────────────────────────────────────── */
   function $(id) { return document.getElementById(id); }
 
+  /* ── Issue #2: Clear all form fields on every page load ──
+     Prevents browser autocomplete from pre-filling data from
+     a previous session. Each visit starts with a blank form.
+  ─────────────────────────────────────────────────────────── */
+  var allInputs = document.querySelectorAll('input, select, textarea');
+  allInputs.forEach(function (el) {
+    if (el.tagName === 'SELECT') {
+      el.selectedIndex = 0;
+    } else {
+      el.value = '';
+    }
+    el.classList.remove('is-error', 'is-valid');
+  });
+  /* Reset DOB dropdowns explicitly */
+  ['dobDay','dobMonth','dobYear'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.selectedIndex = 0;
+  });
+  /* Disable province and postal code until country is chosen */
+  var provinceEl  = document.getElementById('province');
+  var postalEl    = document.getElementById('postalCode');
+  if (provinceEl) { provinceEl.disabled = true; provinceEl.innerHTML = '<option value="">— Select Country first —</option>'; }
+  if (postalEl)   { postalEl.disabled   = true; postalEl.placeholder = 'Select a country first'; }
+
   function setError(el, errEl, msg) {
     el.classList.add('is-error'); el.classList.remove('is-valid');
     if (errEl) { errEl.textContent = '⚠ ' + msg; errEl.classList.add('visible'); }

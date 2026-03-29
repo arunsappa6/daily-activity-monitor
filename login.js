@@ -83,7 +83,24 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
 
-    /* Success */
+    /* Success — verify profile still exists in DB */
+    var profileCheck = await DAM.db()
+      .from('profiles')
+      .select('id')
+      .eq('id', result.data.user.id)
+      .single();
+
+    if (profileCheck.error || !profileCheck.data) {
+      /* Profile deleted — sign out and show error */
+      await DAM.auth().signOut();
+      btn.textContent = 'Sign In';
+      btn.disabled    = false;
+      $('loginGeneralErr').textContent =
+        '⚠ This account no longer exists. Please register a new account.';
+      $('loginGeneralErr').classList.add('visible');
+      return;
+    }
+
     $('loginSuccess').classList.add('visible');
     setTimeout(function () {
       var redirectTo = sessionStorage.getItem('dam_redirect_after_login') || 'home.html';

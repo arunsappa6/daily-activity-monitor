@@ -11,6 +11,7 @@
   <meta name="theme-color" content="#FFFFFF" />
   <title>Group Dashboard — Daily Activity Monitor</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="calendar.css" />
   <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
 </head>
 <body>
@@ -25,31 +26,68 @@
         <a href="group-dashboard.html" class="nav-link nav-link--active">Group Dashboard</a>
         <a href="personal-dashboard.html" class="nav-link">My Dashboard</a>
         <a href="contact.html" class="nav-link">Contact Us</a>
-        <div class="nav-session">
-          <!-- rendered by session.js -->
-        </div>
+        <div class="nav-session"><!-- session.js --></div>
       </nav>
     </div>
   </header>
 
-  <main class="page-main">
+  <main class="page-main" style="max-width:1100px;">
 
-    <div class="page-header">
-      <h1 class="page-title">Group Dashboard</h1>
-      <p class="page-subtitle" id="groupSubtitle">All groups you belong to or have created.</p>
+    <!-- ── Header row ─────────────────────────────────── -->
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem;">
+      <div class="page-header" style="margin-bottom:0; border:none; padding:0;">
+        <h1 class="page-title">Group Dashboard</h1>
+        <p class="page-subtitle" id="groupSubtitle">Your groups and schedules.</p>
+      </div>
+      <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+        <a href="create-group.html" class="btn btn--primary" style="font-size:0.9rem; padding:0.55rem 1.25rem;">➕ Create Group</a>
+        <button type="button" class="btn btn--outline" id="joinGroupBtn" style="font-size:0.9rem; padding:0.55rem 1.25rem;">🤝 Join Group</button>
+      </div>
     </div>
 
-    <div style="display:flex; justify-content:flex-end; margin-bottom:1.25rem; gap:0.75rem;">
-      <a href="create-group.html" class="btn btn--primary" style="font-size:0.9rem; padding:0.55rem 1.25rem;">
-        ➕ Create Group
-      </a>
-      <a href="join-group.html" class="btn btn--outline" style="font-size:0.9rem; padding:0.55rem 1.25rem;">
-        🤝 Join Group
-      </a>
+    <!-- ── Admin Pending Requests (shown to admins only) ── -->
+    <div id="adminRequestsSection" style="display:none; margin-bottom:2rem;">
+      <div class="form-section" style="border-color:#EF9F27;">
+        <div class="form-section-title" style="color:#854F0B;">⏳ Pending Join Requests</div>
+        <div id="pendingRequestsList">
+          <p style="font-size:0.9rem; color:var(--color-ink-muted);">No pending requests.</p>
+        </div>
+      </div>
     </div>
 
-    <div class="groups-grid" id="groupsGrid">
-      <!-- Populated by JS -->
+    <!-- ── My Groups list ─────────────────────────────── -->
+    <div style="display:grid; grid-template-columns:280px 1fr; gap:1.5rem; align-items:start;">
+
+      <!-- Left: Group list -->
+      <div>
+        <div style="font-family:var(--font-heading); font-size:0.95rem; font-weight:700;
+                    color:var(--color-ink); margin-bottom:0.75rem; padding-bottom:0.5rem;
+                    border-bottom:2px solid var(--color-border);">My Groups</div>
+        <div id="groupList" style="display:flex; flex-direction:column; gap:0.5rem;">
+          <p style="font-size:0.88rem; color:var(--color-ink-light); font-style:italic;">Loading…</p>
+        </div>
+      </div>
+
+      <!-- Right: Calendar panel -->
+      <div id="calendarPanel">
+        <div class="cal-panel-empty" id="calPanelEmpty">
+          <div style="text-align:center; padding:3rem 1rem; color:var(--color-ink-muted);">
+            <div style="font-size:2.5rem; margin-bottom:0.75rem;">📅</div>
+            <p>Select a group to view its schedule calendar.</p>
+          </div>
+        </div>
+        <div id="calendarWrap" style="display:none;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+            <h2 id="calGroupTitle" style="font-family:var(--font-heading); font-size:1.15rem; font-weight:700; color:var(--color-ink);"></h2>
+            <div style="display:flex; gap:0.5rem;">
+              <button class="cal-nav-btn" id="calPrev">‹</button>
+              <button class="cal-nav-btn" id="calNext">›</button>
+            </div>
+          </div>
+          <div id="calendarRoot"></div>
+        </div>
+      </div>
+
     </div>
 
   </main>
@@ -58,82 +96,150 @@
     <p>&copy; 2026 Daily Activity Monitor. All rights reserved.</p>
   </footer>
 
+  <!-- ══ JOIN GROUP MODAL ══════════════════════════════════ -->
+  <div class="modal-overlay" id="joinModal" role="dialog" aria-modal="true">
+    <div class="modal-box" style="max-width:500px;">
+      <div class="modal-title">Join a Group</div>
+      <div class="modal-subtitle">Search for the group you want to join and submit your request.</div>
+
+      <div class="modal-form">
+
+        <!-- Group Name with autocomplete -->
+        <div class="form-group" style="position:relative;">
+          <label for="joinGroupName">Group Name <span class="required">*</span></label>
+          <input type="text" id="joinGroupName" placeholder="Start typing a group name…" autocomplete="off" />
+          <div id="groupSuggestions" style="
+            display:none; position:absolute; top:100%; left:0; right:0;
+            background:var(--color-surface); border:1px solid var(--color-border);
+            border-radius:0 0 var(--radius-sm) var(--radius-sm);
+            box-shadow:var(--shadow-md); z-index:300; max-height:200px; overflow-y:auto;">
+          </div>
+          <span class="field-error" id="joinGroupNameErr">⚠ Please enter a group name.</span>
+        </div>
+
+        <!-- Reason -->
+        <div class="form-group">
+          <label for="joinReason">Reason for Joining</label>
+          <textarea id="joinReason" rows="2" placeholder="Why do you want to join this group? (optional)"
+            style="width:100%; font-family:var(--font-body); font-size:0.92rem;
+                   padding:0.65rem 0.85rem; border:1.5px solid var(--color-border);
+                   border-radius:var(--radius-sm); resize:vertical; outline:none;
+                   background:var(--color-surface); color:var(--color-ink);"></textarea>
+        </div>
+
+        <!-- Relationship -->
+        <div class="form-group">
+          <label for="joinRelationship">Relationship to Group <span class="required">*</span></label>
+          <div class="select-wrapper">
+            <select id="joinRelationship">
+              <option value="">— Select Relationship —</option>
+              <option>Father</option><option>Mother</option>
+              <option>Son</option><option>Daughter</option>
+              <option>Father-in-law</option><option>Uncle</option>
+              <option>Aunt</option><option>Son-in-law</option>
+              <option>Brother-in-law</option><option>Sister-in-law</option>
+              <option>Daughter-in-law</option>
+              <option>Grand-father</option><option>Grand-mother</option>
+            </select>
+          </div>
+          <span class="field-error" id="joinRelationshipErr">⚠ Please select a relationship.</span>
+        </div>
+
+        <!-- General error -->
+        <div class="field-error" id="joinGeneralErr">⚠ Please fill in all required fields.</div>
+
+      </div>
+
+      <div class="modal-actions" style="margin-top:1.25rem;">
+        <button type="button" class="btn--cancel" id="cancelJoinBtn">Cancel</button>
+        <button type="button" class="btn--submit" id="submitJoinBtn" style="margin-top:0;">Submit Request</button>
+      </div>
+
+      <!-- Success state -->
+      <div id="joinSuccessMsg" style="display:none; text-align:center; padding:1.5rem 0 0.5rem;">
+        <div style="font-size:2.5rem; margin-bottom:0.75rem;">✅</div>
+        <div style="font-family:var(--font-heading); font-size:1.05rem; color:var(--color-ink); margin-bottom:0.4rem;">
+          Request Submitted!
+        </div>
+        <div style="font-size:0.9rem; color:var(--color-ink-muted); line-height:1.65;">
+          Once the Admin approves your request, you will be able to view the group schedule.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ADD ACTIVITY MODAL ════════════════════════════════ -->
+  <div class="modal-overlay" id="addActivityModal" role="dialog" aria-modal="true">
+    <div class="modal-box" style="max-width:460px;">
+      <div class="modal-title" id="addActivityTitle">Add Activity</div>
+      <div class="modal-subtitle" id="addActivityDate"></div>
+      <div class="modal-form">
+        <div class="form-group">
+          <label for="activityType">Activity <span class="required">*</span></label>
+          <div class="select-wrapper">
+            <select id="activityType">
+              <option value="">— Select Activity —</option>
+              <option value="Cycling">🚴 Cycling</option>
+              <option value="Jogging">🏃 Jogging</option>
+              <option value="Reading">📚 Reading</option>
+              <option value="Gardening">🌱 Gardening</option>
+              <option value="Breakfast Prep">🍳 Breakfast Prep</option>
+              <option value="Lunch Prep">🥗 Lunch Prep</option>
+              <option value="Dinner Prep">🍽️ Dinner Prep</option>
+              <option value="Hydration">💧 Hydration</option>
+              <option value="Personal Care">🧴 Personal Care</option>
+              <option value="Work">💼 Work</option>
+              <option value="Drop kids">🚗 Drop kids</option>
+              <option value="Pick-up kids">🏫 Pick-up kids</option>
+              <option value="Learning">📖 Learning</option>
+              <option value="Commute">🚌 Commute</option>
+            </select>
+          </div>
+          <span class="field-error" id="activityTypeErr">⚠ Please select an activity.</span>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+          <div class="form-group">
+            <label for="activityFrom">From Time <span class="required">*</span></label>
+            <input type="time" id="activityFrom" />
+            <span class="field-error" id="activityFromErr">⚠ Required.</span>
+          </div>
+          <div class="form-group">
+            <label for="activityEnd">End Time <span class="required">*</span></label>
+            <input type="time" id="activityEnd" />
+            <span class="field-error" id="activityEndErr">⚠ Required.</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="activityLocation">Location</label>
+          <input type="text" id="activityLocation" placeholder="e.g. Toronto YMCA" />
+        </div>
+        <div class="field-error" id="activityGenErr">⚠ End time must be after start time.</div>
+      </div>
+      <div class="modal-actions" style="margin-top:1.25rem;">
+        <button type="button" class="btn--cancel" id="cancelActivityBtn">Cancel</button>
+        <button type="button" class="btn--submit" id="saveActivityBtn" style="margin-top:0;">Save Activity</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ VIEW DAY SCHEDULE MODAL ══════════════════════════ -->
+  <div class="modal-overlay" id="viewDayModal" role="dialog" aria-modal="true">
+    <div class="modal-box" style="max-width:500px; background:#F0F0F0;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <div class="modal-title" id="viewDayTitle">Schedule</div>
+        <button type="button" class="btn--cancel" id="closeViewDayBtn"
+                style="padding:0.35rem 0.75rem; font-size:0.85rem;">✕ Close</button>
+      </div>
+      <div id="viewDayList" style="display:flex; flex-direction:column; gap:0.6rem; min-height:80px;">
+        <p style="color:var(--color-ink-muted); font-size:0.9rem;">No activities scheduled for this day.</p>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="supabase-config.js"></script>
   <script src="session.js"></script>
   <script src="main.js"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-
-      var user   = DAMSession.getUser();
-      var grid   = document.getElementById('groupsGrid');
-      var subtitle = document.getElementById('groupSubtitle');
-
-      if (!user) return; // session.js handles redirect
-
-      // Load all groups
-      var allGroups = [];
-      try { allGroups = JSON.parse(localStorage.getItem('dam_groups') || '[]'); }
-      catch (e) { allGroups = []; }
-
-      // Filter to groups this user created OR is listed as a member in
-      var userEmail = user.email.toLowerCase();
-      var myGroups  = allGroups.filter(function (g) {
-        if (g.admin && g.admin.toLowerCase() === (user.firstName + ' ' + user.lastName).toLowerCase()) return true;
-        if (g.members && g.members.some(function (m) {
-          return m.email && m.email.toLowerCase() === userEmail;
-        })) return true;
-        return false;
-      });
-
-      subtitle.textContent = myGroups.length > 0
-        ? 'You are part of ' + myGroups.length + ' group' + (myGroups.length > 1 ? 's' : '') + '.'
-        : 'You have not joined or created any groups yet.';
-
-      if (myGroups.length === 0) {
-        grid.innerHTML = [
-          '<div class="group-card-empty">',
-            '<div class="group-card-empty-icon">📭</div>',
-            '<p>No groups yet.</p>',
-            '<p style="font-size:0.85rem; margin-top:0.4rem; color:var(--color-ink-light);">',
-              'Create a new group or join one using an invite code.',
-            '</p>',
-          '</div>'
-        ].join('');
-        return;
-      }
-
-      // Render group cards
-      grid.innerHTML = myGroups.map(function (g) {
-        var isAdmin = g.admin &&
-          g.admin.toLowerCase() === (user.firstName + ' ' + user.lastName).toLowerCase();
-        var memberCount = (g.members || []).length;
-        var created = g.createdAt
-          ? new Date(g.createdAt).toLocaleDateString('en-CA', { year:'numeric', month:'short', day:'numeric' })
-          : '';
-
-        return [
-          '<div class="group-card">',
-            '<div class="group-card-header">',
-              '<div class="group-card-name">' + escHtml(g.name) + '</div>',
-              '<span class="group-card-badge ' + (isAdmin ? 'group-card-badge--admin' : 'group-card-badge--member') + '">',
-                isAdmin ? '★ Admin' : 'Member',
-              '</span>',
-            '</div>',
-            '<div class="group-card-meta">Created ' + (created || 'recently') + '</div>',
-            '<div class="group-card-members">',
-              '👥 ' + memberCount + ' member' + (memberCount !== 1 ? 's' : ''),
-            '</div>',
-          '</div>'
-        ].join('');
-      }).join('');
-
-      function escHtml(str) {
-        return String(str)
-          .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-      }
-    });
-  </script>
+  <script src="group-dashboard.js"></script>
 </body>
 </html>
