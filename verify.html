@@ -31,12 +31,43 @@
     </div>
   </header>
 
-  <main class="page-main">
-    <div class="info-box" id="verifyBox">
-      <div class="info-box-icon" id="verifyIcon">⏳</div>
-      <h2 id="verifyTitle">Verifying…</h2>
-      <!-- session.js populates #verifyMessage -->
-      <p id="verifyMessage">Please wait while we verify your email.</p>
+  <main class="page-main" style="display:flex; justify-content:center; padding-top:2rem;">
+    <div class="info-box" id="verifyBox" style="max-width:480px; width:100%;">
+
+      <!-- Loading state -->
+      <div id="stateLoading">
+        <div class="info-box-icon">⏳</div>
+        <h2>Verifying your email…</h2>
+        <p>Please wait a moment.</p>
+      </div>
+
+      <!-- Success state -->
+      <div id="stateSuccess" style="display:none;">
+        <div class="info-box-icon">✅</div>
+        <h2>Email Verified!</h2>
+        <p>
+          Your account is now active. You can log in and start using
+          Daily Activity Monitor.
+        </p>
+        <a href="login.html" class="btn--submit"
+           style="display:block; margin-top:1.5rem; text-decoration:none; text-align:center;">
+          Go to Login
+        </a>
+      </div>
+
+      <!-- Error state -->
+      <div id="stateError" style="display:none;">
+        <div class="info-box-icon">⚠️</div>
+        <h2>Verification Failed</h2>
+        <p id="errorMsg">
+          This link may have expired or already been used.
+        </p>
+        <p style="margin-top:0.75rem; font-size:0.88rem; color:var(--color-ink-light);">
+          Please <a href="register.html">register again</a> or
+          <a href="login.html">try logging in</a> if you have already verified.
+        </p>
+      </div>
+
     </div>
   </main>
 
@@ -44,30 +75,65 @@
     <p>&copy; 2026 Daily Activity Monitor. All rights reserved.</p>
   </footer>
 
+  <!-- Load Supabase FIRST — must be before any auth check -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="supabase-config.js"></script>
-  <script src="session.js"></script>
   <script src="main.js"></script>
   <script>
-    // session.js handleVerificationToken() runs automatically.
-    // After it runs, update the icon + title based on the result.
-    document.addEventListener('DOMContentLoaded', function () {
-      setTimeout(function () {
-        var msg = document.getElementById('verifyMessage').textContent || '';
-        var icon  = document.getElementById('verifyIcon');
-        var title = document.getElementById('verifyTitle');
-        if (msg.indexOf('✅') !== -1) {
-          icon.textContent  = '✅';
-          title.textContent = 'Email Verified!';
-          // Clean up session storage
-          sessionStorage.removeItem('dam_pending_email');
-          sessionStorage.removeItem('dam_pending_token');
-        } else {
-          icon.textContent  = '⚠️';
-          title.textContent = 'Verification Failed';
+    /* ── Email verification handler ───────────────────────────
+       When Supabase sends the confirmation email, the link
+       contains a token_hash in the URL fragment (#) or as a
+       query parameter. The Supabase SDK picks this up automatically
+       via onAuthStateChange and fires either SIGNED_IN or
+       USER_UPDATED to confirm the email is verified.
+    ─────────────────────────────────────────────────────────── */
+    (function () {
+
+      function show(id) {
+        ['stateLoading','stateSuccess','stateError'].forEach(function (s) {
+          document.getElementById(s).style.display = (s === id) ? 'block' : 'none';
+        });
+      }
+
+      var verified = false;
+
+      /* Listen for Supabase auth events triggered by the email link */
+      _supabaseClient.auth.onAuthStateChange(function (event, session) {
+        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+          /* Email successfully confirmed */
+          verified = true;
+          /* Sign out immediately — user must log in intentionally */
+          _supabaseClient.auth.signOut();
+          show('stateSuccess');
         }
-      }, 300);
-    });
+      });
+
+      /* Also try getSession — handles cases where Supabase already
+         processed the token before our listener was attached */
+      _supabaseClient.auth.getSession().then(function (result) {
+        if (result.data && result.data.session && !verified) {
+          verified = true;
+          _supabaseClient.auth.signOut();
+          show('stateSuccess');
+        }
+      });
+
+      /* Fallback timeout — if nothing fires after 5 seconds, show error */
+      setTimeout(function () {
+        if (!verified) {
+          /* Check if there's actually a token in the URL at all */
+          var hash   = window.location.hash;
+          var search = window.location.search;
+          if (!hash && !search) {
+            /* No token — someone navigated here directly */
+            document.getElementById('errorMsg').textContent =
+              'No verification token found. Please click the link in your email.';
+          }
+          show('stateError');
+        }
+      }, 5000);
+
+    })();
   </script>
 </body>
 </html>

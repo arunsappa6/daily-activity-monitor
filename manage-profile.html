@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#FFFFFF" />
+  <title>Manage Profile — Daily Activity Monitor</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <header class="navbar" id="navbar">
+    <div class="navbar-inner">
+      <div class="nav-brand"><a href="home.html">Daily Activity Monitor</a></div>
+      <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="nav-links" id="navLinks">
+        <a href="group-dashboard.html" class="nav-link">Group Dashboard</a>
+        <a href="personal-dashboard.html" class="nav-link">My Dashboard</a>
+        <a href="contact.html" class="nav-link">Contact Us</a>
+        <div class="nav-session"><!-- session.js --></div>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page-main" style="max-width:700px;">
+
+    <div class="page-header">
+      <h1 class="page-title">Manage Profile</h1>
+      <p class="page-subtitle">Update your information or delete your account.</p>
+    </div>
+
+    <!-- ── Option 1: Update Profile ─────────────────────── -->
+    <div class="form-section" style="margin-bottom:1.5rem;">
+      <div class="form-section-title">Update Profile</div>
+
+      <div class="form-row form-row--2">
+        <div class="form-group">
+          <label for="upFirstName">First Name</label>
+          <input type="text" id="upFirstName" placeholder="First name" />
+          <span class="field-error" id="upFirstNameErr">⚠ Letters and spaces only.</span>
+        </div>
+        <div class="form-group">
+          <label for="upLastName">Last Name</label>
+          <input type="text" id="upLastName" placeholder="Last name" />
+          <span class="field-error" id="upLastNameErr">⚠ Letters and spaces only.</span>
+        </div>
+      </div>
+
+      <div class="form-row form-row--1">
+        <div class="form-group">
+          <label for="upPhone">Phone Number</label>
+          <input type="tel" id="upPhone" placeholder="10-digit number" maxlength="10" />
+          <span class="field-error" id="upPhoneErr">⚠ Must be 10 numeric digits.</span>
+        </div>
+      </div>
+
+      <div class="form-row form-row--1">
+        <div class="form-group">
+          <label for="upStreetName">Street Name</label>
+          <input type="text" id="upStreetName" placeholder="Street name" maxlength="60" />
+        </div>
+      </div>
+
+      <!-- Update success/error banners -->
+      <div class="success-banner" id="updateSuccess" role="status" style="margin-top:0.75rem;">
+        ✅ Profile updated successfully!
+      </div>
+      <div class="duplicate-banner" id="updateError" role="alert" style="margin-top:0.75rem;">
+        ⚠ Could not update profile. Please try again.
+      </div>
+
+      <button type="button" class="btn--submit" id="updateProfileBtn" style="margin-top:1rem;">
+        Save Changes
+      </button>
+    </div>
+
+    <!-- ── Option 2: Delete Profile ─────────────────────── -->
+    <div class="form-section" style="border-color:#E74C3C22;">
+      <div class="form-section-title" style="color:#C0392B; border-color:#E74C3C33;">
+        Delete Profile
+      </div>
+      <p style="font-size:0.9rem; color:var(--color-ink-muted); margin-bottom:1.25rem; line-height:1.65;">
+        Permanently delete your account and all associated data. This action cannot be undone.
+      </p>
+      <button type="button" class="btn--submit" id="openDeleteModalBtn"
+              style="background:#E74C3C; max-width:220px; margin-top:0;">
+        Delete My Profile
+      </button>
+    </div>
+
+    <div style="margin-top:1.5rem;">
+      <a href="my-profile.html" class="btn btn--outline" style="font-size:0.9rem; padding:0.6rem 1.25rem;">
+        ← Back to Personal Details
+      </a>
+    </div>
+
+  </main>
+
+  <!-- ══ DELETE PROFILE MODAL ══════════════════════════════ -->
+  <div class="modal-overlay" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-box">
+
+      <!-- Modal form (shown by default) -->
+      <div id="deleteForm">
+        <div class="modal-title" id="modalTitle">Delete Your Profile</div>
+        <div class="modal-subtitle">
+          Please confirm your identity before we permanently delete your account.
+          This cannot be undone.
+        </div>
+
+        <div class="modal-form">
+
+          <div class="form-group">
+            <label for="deleteReason">Reason for deleting <span style="font-size:0.78rem; color:var(--color-ink-light);">(optional)</span></label>
+            <textarea id="deleteReason" rows="3"
+              placeholder="Tell us why you're leaving (optional)…"
+              style="width:100%; font-family:var(--font-body); font-size:0.92rem;
+                     padding:0.65rem 0.85rem; border:1.5px solid var(--color-border);
+                     border-radius:var(--radius-sm); resize:vertical; outline:none;
+                     background:var(--color-surface); color:var(--color-ink);">
+            </textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="deleteEmail">Email Address <span class="required">*</span></label>
+            <input type="email" id="deleteEmail" placeholder="Enter your registered email" autocomplete="email" />
+            <span class="field-error" id="deleteEmailErr">⚠ Please enter your email address.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="deletePassword">Password <span class="required">*</span></label>
+            <input type="password" id="deletePassword" placeholder="Enter your password" autocomplete="current-password" />
+            <span class="field-error" id="deletePasswordErr">⚠ Password is required.</span>
+          </div>
+
+          <!-- Auth error -->
+          <div class="field-error" id="deleteAuthErr" style="font-size:0.88rem;">
+            ⚠ Incorrect email or password. Please try again.
+          </div>
+
+        </div>
+
+        <div class="modal-actions" style="margin-top:1.25rem;">
+          <button type="button" class="btn--cancel" id="cancelDeleteBtn">Cancel</button>
+          <button type="button" class="btn--danger" id="confirmDeleteBtn">Delete My Account</button>
+        </div>
+      </div>
+
+      <!-- Deletion success message (shown after deletion) -->
+      <div class="delete-success-msg" id="deleteSuccessMsg">
+        <div class="delete-success-emoji">😢 💔 👋</div>
+        <div class="delete-success-text">Your profile has been deleted.</div>
+        <div class="delete-success-sub">
+          Sorry we missed you. We hope to see you again someday.
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="session.js"></script>
+  <script src="main.js"></script>
+  <script src="manage-profile.js"></script>
+</body>
+</html>

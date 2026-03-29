@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#FFFFFF" />
+  <title>Personal Details — Daily Activity Monitor</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    .profile-hero {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .profile-avatar-lg {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      background: var(--color-accent);
+      color: #fff;
+      font-family: var(--font-heading);
+      font-size: 2rem;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .profile-hero-name {
+      font-family: var(--font-heading);
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--color-ink);
+    }
+    .profile-hero-email {
+      font-size: 0.9rem;
+      color: var(--color-ink-muted);
+      margin-top: 0.2rem;
+    }
+    .profile-hero-badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 10px;
+      border-radius: 99px;
+      margin-top: 0.5rem;
+      background: #D5F5E3;
+      color: #1E8449;
+    }
+    .details-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .detail-tile {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 1.1rem 1.25rem;
+    }
+    .detail-tile-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-ink-light);
+      margin-bottom: 0.3rem;
+    }
+    .detail-tile-value {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--color-ink);
+      word-break: break-word;
+    }
+    .detail-tile-value.loading {
+      color: var(--color-ink-light);
+      font-weight: 400;
+      font-style: italic;
+    }
+    .manage-link-bar {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    @media (max-width: 640px) {
+      .profile-hero { flex-direction: column; text-align: center; }
+      .details-grid { grid-template-columns: 1fr; }
+      .manage-link-bar { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="navbar" id="navbar">
+    <div class="navbar-inner">
+      <div class="nav-brand"><a href="home.html">Daily Activity Monitor</a></div>
+      <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="nav-links" id="navLinks">
+        <a href="group-dashboard.html" class="nav-link">Group Dashboard</a>
+        <a href="personal-dashboard.html" class="nav-link">My Dashboard</a>
+        <a href="contact.html" class="nav-link">Contact Us</a>
+        <div class="nav-session"><!-- session.js --></div>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page-main" style="max-width:820px;">
+
+    <div class="page-header">
+      <h1 class="page-title">Personal Details</h1>
+      <p class="page-subtitle">Your account information stored with Daily Activity Monitor.</p>
+    </div>
+
+    <!-- Profile hero card -->
+    <div class="profile-hero" id="profileHero">
+      <div class="profile-avatar-lg" id="heroAvatar">…</div>
+      <div>
+        <div class="profile-hero-name" id="heroName">Loading…</div>
+        <div class="profile-hero-email" id="heroEmail"></div>
+        <span class="profile-hero-badge" id="heroBadge">Verified ✓</span>
+      </div>
+    </div>
+
+    <!-- Detail tiles -->
+    <div class="details-grid" id="detailsGrid">
+      <div class="detail-tile"><div class="detail-tile-label">First Name</div><div class="detail-tile-value loading" id="tileFName">—</div></div>
+      <div class="detail-tile"><div class="detail-tile-label">Last Name</div><div class="detail-tile-value loading" id="tileLName">—</div></div>
+      <div class="detail-tile"><div class="detail-tile-label">Email</div><div class="detail-tile-value loading" id="tileEmail">—</div></div>
+      <div class="detail-tile"><div class="detail-tile-label">Phone Number</div><div class="detail-tile-value loading" id="tilePhone">—</div></div>
+      <div class="detail-tile"><div class="detail-tile-label">Date of Birth</div><div class="detail-tile-value loading" id="tileDob">—</div></div>
+      <div class="detail-tile"><div class="detail-tile-label">Last Visit</div><div class="detail-tile-value loading" id="tileLastVisit">—</div></div>
+      <div class="detail-tile" style="grid-column: 1 / -1;">
+        <div class="detail-tile-label">Address</div>
+        <div class="detail-tile-value loading" id="tileAddress">—</div>
+      </div>
+      <div class="detail-tile"><div class="detail-tile-label">Member Since</div><div class="detail-tile-value loading" id="tileSince">—</div></div>
+      <div class="detail-tile"><div class="detail-tile-label">Groups</div><div class="detail-tile-value loading" id="tileGroups">—</div></div>
+    </div>
+
+    <!-- Quick links to Manage Profile -->
+    <div class="manage-link-bar">
+      <a href="manage-profile.html" class="btn btn--primary" style="font-size:0.9rem; padding:0.6rem 1.25rem;">
+        ⚙️ Manage Profile
+      </a>
+      <a href="home.html" class="btn btn--outline" style="font-size:0.9rem; padding:0.6rem 1.25rem;">
+        ← Back to Home
+      </a>
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Daily Activity Monitor. All rights reserved.</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="session.js"></script>
+  <script src="main.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async function () {
+
+      /* Wait for session.js init */
+      await new Promise(function (resolve) { setTimeout(resolve, 400); });
+
+      var sessionResult = await DAM.auth().getSession();
+      var session = sessionResult.data && sessionResult.data.session ? sessionResult.data.session : null;
+      var user = session ? session.user : null;
+      if (!user) return;
+
+      /* Fetch profile */
+      var pResult = await DAM.db()
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      var p = pResult.data || {};
+
+      /* Fetch group count */
+      var gResult = await DAM.db()
+        .from('groups')
+        .select('id', { count: 'exact', head: true })
+        .eq('created_by', user.id);
+      var groupCount = gResult.count || 0;
+
+      /* Helper: format date */
+      function fmtDate(str) {
+        if (!str) return '—';
+        try { return new Date(str).toLocaleDateString('en-CA', { year:'numeric', month:'long', day:'numeric' }); }
+        catch (e) { return str; }
+      }
+
+      /* Helper: escape HTML */
+      function esc(s) {
+        return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      }
+
+      /* Avatar initials */
+      var initials = ((p.first_name||'?').charAt(0) + (p.last_name||'?').charAt(0)).toUpperCase();
+      document.getElementById('heroAvatar').textContent  = initials;
+      document.getElementById('heroName').textContent    = esc((p.first_name||'') + ' ' + (p.last_name||''));
+      document.getElementById('heroEmail').textContent   = user.email || '';
+      if (p.is_admin) {
+        document.getElementById('heroBadge').textContent = 'Admin ★';
+      }
+
+      /* Address assembly */
+      var addrParts = [p.apt_unit, p.street_number, p.street_name, p.province, p.country, p.postal_code]
+        .filter(Boolean);
+
+      /* Last visit from Supabase Auth last_sign_in_at */
+      var lastVisit = user.last_sign_in_at ? fmtDate(user.last_sign_in_at) : 'First visit today';
+
+      /* Fill tiles */
+      var tiles = {
+        tileFName:     p.first_name  || '—',
+        tileLName:     p.last_name   || '—',
+        tileEmail:     user.email    || '—',
+        tilePhone:     p.phone       || '—',
+        tileDob:       fmtDate(p.date_of_birth),
+        tileLastVisit: lastVisit,
+        tileAddress:   addrParts.join(', ') || '—',
+        tileSince:     fmtDate(p.created_at),
+        tileGroups:    groupCount + ' group' + (groupCount !== 1 ? 's' : '')
+      };
+
+      Object.keys(tiles).forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) {
+          el.textContent = tiles[id];
+          el.classList.remove('loading');
+        }
+      });
+    });
+  </script>
+</body>
+</html>

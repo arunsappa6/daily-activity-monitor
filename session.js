@@ -18,7 +18,9 @@
     'group-dashboard.html',
     'personal-dashboard.html',
     'create-group.html',
-    'join-group.html'
+    'join-group.html',
+    'my-profile.html',
+    'manage-profile.html'
   ];
 
   /* ── Pages a logged-in user should not see ──────────────── */
@@ -47,19 +49,51 @@
         ? profile.first_name
         : (user.email || '').split('@')[0];
 
-      sessionDiv.innerHTML =
-        '<span class="nav-user-greeting">Hi, <strong>' +
-        escHtml(firstName) + '</strong></span>' +
-        '<button class="nav-btn nav-btn--ghost" id="logoutBtn">Logout</button>';
+      sessionDiv.innerHTML = [
+        '<span class="nav-user-greeting">Hi, <strong>' + escHtml(firstName) + '</strong></span>',
+        '<div class="nav-profile-wrap" id="navProfileWrap">',
+          '<button class="nav-profile-btn" id="navProfileBtn" aria-haspopup="true" aria-expanded="false">',
+            'My Profile <span class="profile-chevron">▾</span>',
+          '</button>',
+          '<div class="nav-profile-dropdown" id="navProfileDropdown" role="menu">',
+            '<div class="nav-profile-dropdown-section">',
+              '<div class="nav-profile-dropdown-label">Account</div>',
+              '<a href="my-profile.html" role="menuitem">👤 Personal Details</a>',
+              '<a href="manage-profile.html" role="menuitem">⚙️ Manage Profile</a>',
+            '</div>',
+            '<div class="nav-profile-dropdown-section">',
+              '<button class="dropdown-item dropdown-item-danger" id="navLogoutBtn" role="menuitem">',
+                '🚪 Logout',
+              '</button>',
+            '</div>',
+          '</div>',
+        '</div>'
+      ].join('');
 
-      var logoutBtn = document.getElementById('logoutBtn');
-      if (logoutBtn) {
-        logoutBtn.addEventListener('click', function () {
-          DAM.auth().signOut().then(function () {
-            window.location.href = 'index.html';
-          });
+      /* Toggle dropdown */
+      var wrap   = document.getElementById('navProfileWrap');
+      var btn    = document.getElementById('navProfileBtn');
+      var dd     = document.getElementById('navProfileDropdown');
+
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var isOpen = wrap.classList.toggle('is-open');
+        btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      });
+
+      /* Close on outside click */
+      document.addEventListener('click', function () {
+        wrap.classList.remove('is-open');
+        btn.setAttribute('aria-expanded', 'false');
+      });
+
+      /* Logout */
+      document.getElementById('navLogoutBtn').addEventListener('click', function () {
+        DAM.auth().signOut().then(function () {
+          window.location.href = 'index.html';
         });
-      }
+      });
+
     } else {
       sessionDiv.innerHTML =
         '<a href="login.html"   class="nav-btn nav-btn--ghost">Login</a>' +

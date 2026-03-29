@@ -307,18 +307,20 @@ document.addEventListener('DOMContentLoaded', function () {
     btn.disabled    = true;
 
     /* ── Call Supabase Auth signUp ────────────────────────────
-       Supabase automatically:
-       • Creates the user account
-       • Sends a verification email with a link
-       • The link points to your site's /verify.html (configured
-         in Supabase Dashboard → Authentication → URL Configuration
-         → Redirect URLs: add  https://your-site.github.io/verify.html )
+       emailRedirectTo must include the full path to verify.html
+       including any GitHub Pages subfolder (e.g. /repo-name/).
+       We derive this from the current page's URL so it always
+       matches regardless of how the site is deployed.
     ─────────────────────────────────────────────────────────── */
+    var verifyUrl = window.location.href
+      .replace(/\/[^\/]*$/, '/verify.html')  // replace current filename with verify.html
+      .split('?')[0];                         // strip any query string
+
     var result = await DAM.auth().signUp({
       email:    email,
       password: password,
       options: {
-        emailRedirectTo: window.location.origin + '/verify.html',
+        emailRedirectTo: verifyUrl,
         data: {
           first_name:    firstName,
           last_name:     lastName,
@@ -362,8 +364,8 @@ document.addEventListener('DOMContentLoaded', function () {
     ─────────────────────────────────────────────────────────── */
     sessionStorage.setItem('dam_pending_email', email);
 
-    /* Download Users.txt as a side effect */
-    await downloadUsersTxt();
+    /* Users.txt download removed — all user data is now stored
+       securely in Supabase. No local file download needed. */
 
     $('registerSubmit').style.display = 'none';
     $('formFieldsWrap').style.display = 'none';

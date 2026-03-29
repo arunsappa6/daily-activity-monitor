@@ -173,3 +173,19 @@ create trigger on_auth_user_created
 -- ── Done! ─────────────────────────────────────────────────
 -- Your database is ready. Return to your site and test
 -- registration — the profile row will be created automatically.
+
+-- ── 9. RPC function: delete current user ─────────────────
+-- Called from manage-profile.js after re-authentication.
+-- Deletes the user from auth.users (cascades to profiles).
+-- Must run with security definer so it has admin privileges.
+
+create or replace function public.delete_current_user()
+returns void as $$
+begin
+  delete from auth.users where id = auth.uid();
+end;
+$$ language plpgsql security definer;
+
+-- Grant execute to authenticated users only
+revoke all on function public.delete_current_user() from public;
+grant execute on function public.delete_current_user() to authenticated;

@@ -53,8 +53,12 @@ document.addEventListener('DOMContentLoaded', function () {
        even if the email doesn't exist — this prevents attackers
        from discovering which emails are registered.
     ─────────────────────────────────────────────────────────── */
+    var resetUrl = window.location.href
+      .replace(/\/[^\/]*$/, '/reset-password.html')
+      .split('?')[0];
+
     var result = await DAM.auth().resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + '/reset-password.html'
+      redirectTo: resetUrl
     });
 
     btn.textContent = 'Send Reset Link';

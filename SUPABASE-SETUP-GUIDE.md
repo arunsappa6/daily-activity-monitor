@@ -82,11 +82,22 @@ You need to tell Supabase which URLs are allowed.
 1. In Supabase, go to **Authentication → URL Configuration**
 2. Set **Site URL** to your GitHub Pages address:
    `https://YOUR-USERNAME.github.io/YOUR-REPO-NAME`
-3. Under **Redirect URLs**, click **"Add URL"** and add these three:
+3. Under **Redirect URLs**, click **"Add URL"** and add these:
    - `https://YOUR-USERNAME.github.io/YOUR-REPO-NAME/verify.html`
    - `https://YOUR-USERNAME.github.io/YOUR-REPO-NAME/reset-password.html`
    - `http://localhost/verify.html` *(for local testing)*
 4. Click **"Save"**
+
+> **Important — GitHub Pages subfolder:** Your site lives at
+> `https://username.github.io/repo-name/` not just `https://username.github.io/`.
+> The code automatically detects the correct path from the current URL,
+> so you only need to make sure the redirect URLs above are listed exactly
+> as shown (with your real username and repo name).
+
+> **iPhone / Outlook tip:** Email clients sometimes open links in an
+> in-app browser that strips URL fragments. If users report a 404 after
+> clicking the verification link, ensure your Redirect URLs in Supabase
+> match your GitHub Pages URL exactly including the subfolder.
 
 ---
 
