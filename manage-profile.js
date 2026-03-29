@@ -184,14 +184,17 @@ document.addEventListener('DOMContentLoaded', async function () {
       return;
     }
 
-    /* ── Delete profile row from Supabase ────────────────────
-       1. Delete the user's groups first (clean data)
-       2. Call the delete_current_user() RPC function which
-          deletes from auth.users — this cascades to profiles.
+    /* ── Mark profile as Closed / Past Customer ─────────────
+       Call close_profile_before_delete() FIRST so the status
+       is updated in the profiles table before the auth user
+       row is deleted (which would cascade-delete the profile).
     ─────────────────────────────────────────────────────────── */
+    await DAM.db().rpc('close_profile_before_delete');
+
+    /* ── Delete the user's groups first (clean data) ─────── */
     await DAM.db().from('groups').delete().eq('created_by', user.id);
 
-    /* Call the server-side RPC to delete the auth user */
+    /* ── Call RPC to delete auth user (cascades to profile) ─ */
     var deleteResult = await DAM.db().rpc('delete_current_user');
 
     /* Sign out regardless */

@@ -152,12 +152,93 @@ document.addEventListener('DOMContentLoaded', function () {
       : setError(this, $('lastNameErr'), 'Letters and spaces only.');
   });
 
-  $('email').addEventListener('blur', function () {
-    if (!this.value) { clearState(this, $('emailErr')); return; }
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.value)
-      ? setValid(this, $('emailErr'))
-      : setError(this, $('emailErr'), 'Please enter a valid email address.');
+  /* ── Email — format check + real-time Supabase existence check ── */
+  $('email').addEventListener('blur', async function () {
+    var val = this.value.trim();
+
+    /* Hide any previous existing-customer banner */
+    var existBanner = $('existingCustomerBanner');
+    if (existBanner) existBanner.classList.remove('visible');
+    unlockFieldsAfterEmail();
+
+    if (!val) { clearState(this, $('emailErr')); return; }
+
+    /* Format check first */
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+      setError(this, $('emailErr'), 'Please enter a valid email address.');
+      return;
+    }
+
+    setValid(this, $('emailErr'));
+
+    /* ── Check Supabase for existing account ───────────────
+       Uses check_email_exists() RPC — returns profile_status
+       and profile_type if the email is already registered.
+    ─────────────────────────────────────────────────────────── */
+    var result = await _supabaseClient.rpc('check_email_exists', { p_email: val });
+
+    if (result.data && result.data.length > 0) {
+      var profile = result.data[0];
+      var status  = profile.profile_status || 'Active';
+
+      if (existBanner) {
+        if (status === 'Closed') {
+          existBanner.innerHTML =
+            '⚠ This email belongs to a <strong>past account</strong> that was deleted. ' +
+            'Please use a different email or <a href="contact.html">contact us</a> for assistance.';
+        } else {
+          existBanner.innerHTML =
+            '⚠ You are already an existing customer. Please <a href="login.html">sign in here</a> instead.';
+        }
+        existBanner.classList.add('visible');
+      }
+
+      /* Lock all fields below email and disable submit */
+      lockFieldsAfterEmail();
+    } else {
+      /* Email is free — make sure everything is unlocked */
+      unlockFieldsAfterEmail();
+    }
   });
+
+  /* ── Also unlock when user types a new email ─────────── */
+  $('email').addEventListener('input', function () {
+    var existBanner = $('existingCustomerBanner');
+    if (existBanner) existBanner.classList.remove('visible');
+    unlockFieldsAfterEmail();
+  });
+
+  /* ── Lock / unlock fields below email ────────────────── */
+  var LOCKABLE_FIELDS = [
+    'phoneNumber','aptUnit','streetNumber','streetName',
+    'country','province','postalCode','password','confirmPassword',
+    'dobDay','dobMonth','dobYear','firstName','lastName'
+  ];
+
+  function lockFieldsAfterEmail() {
+    var btn = $('registerSubmit');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.45'; btn.title = 'Resolve the email issue above.'; }
+    LOCKABLE_FIELDS.forEach(function (id) {
+      var el = $(id);
+      if (el) { el.disabled = true; el.style.opacity = '0.45'; }
+    });
+  }
+
+  function unlockFieldsAfterEmail() {
+    var btn = $('registerSubmit');
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.title = ''; }
+    LOCKABLE_FIELDS.forEach(function (id) {
+      var el = $(id);
+      if (el) { el.disabled = false; el.style.opacity = ''; }
+    });
+    /* Re-lock province/postal if no country chosen yet */
+    var countryEl = $('country');
+    if (countryEl && !countryEl.value) {
+      var prov = $('province'); var post = $('postalCode');
+      if (prov)  { prov.disabled  = true; prov.style.opacity  = ''; }
+      if (post)  { post.disabled  = true; post.style.opacity  = ''; }
+    }
+  }
 
   $('phoneNumber').addEventListener('input', function () {
     var v = this.value;

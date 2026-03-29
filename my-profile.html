@@ -146,6 +146,9 @@
       </div>
       <div class="detail-tile"><div class="detail-tile-label">Member Since</div><div class="detail-tile-value loading" id="tileSince">—</div></div>
       <div class="detail-tile"><div class="detail-tile-label">Groups</div><div class="detail-tile-value loading" id="tileGroups">—</div></div>
+      <div class="detail-tile"><div class="detail-tile-label">Account Status</div><div class="detail-tile-value loading" id="tileStatus">—</div></div>
+      <div class="detail-tile"><div class="detail-tile-label">Customer Type</div><div class="detail-tile-value loading" id="tileType">—</div></div>
+      <div class="detail-tile"><div class="detail-tile-label">Status Updated</div><div class="detail-tile-value loading" id="tileDatePeriod">—</div></div>
     </div>
 
     <!-- Quick links to Manage Profile -->
@@ -182,7 +185,7 @@
       /* Fetch profile */
       var pResult = await DAM.db()
         .from('profiles')
-        .select('*')
+        .select('*, date_period, profile_status, profile_type')
         .eq('id', user.id)
         .single();
       var p = pResult.data || {};
@@ -232,7 +235,10 @@
         tileLastVisit: lastVisit,
         tileAddress:   addrParts.join(', ') || '—',
         tileSince:     fmtDate(p.created_at),
-        tileGroups:    groupCount + ' group' + (groupCount !== 1 ? 's' : '')
+        tileGroups:    groupCount + ' group' + (groupCount !== 1 ? 's' : ''),
+        tileStatus:    p.profile_status  || 'Active',
+        tileType:      p.profile_type    || 'New Customer',
+        tileDatePeriod:p.date_period ? fmtDate(p.date_period) : '—'
       };
 
       Object.keys(tiles).forEach(function (id) {
@@ -242,6 +248,23 @@
           el.classList.remove('loading');
         }
       });
+
+      /* Color-code the Account Status tile */
+      var statusEl = document.getElementById('tileStatus');
+      if (statusEl) {
+        var st = (p.profile_status || 'Active');
+        statusEl.style.display     = 'inline-block';
+        statusEl.style.padding     = '2px 12px';
+        statusEl.style.borderRadius= '99px';
+        statusEl.style.fontSize    = '0.85rem';
+        if (st === 'Active') {
+          statusEl.style.background = '#D5F5E3'; statusEl.style.color = '#1E8449';
+        } else if (st === 'Closed') {
+          statusEl.style.background = '#FADBD8'; statusEl.style.color = '#922B21';
+        } else {
+          statusEl.style.background = '#EBF5FB'; statusEl.style.color = '#1B4F72';
+        }
+      }
     });
   </script>
 </body>

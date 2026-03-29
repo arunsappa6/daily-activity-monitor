@@ -48,7 +48,11 @@
       ⚠️ You are already registered. Please <a href="login.html">sign in here</a> instead.
     </div>
 
-    <div class="form-fields-wrap" id="formFieldsWrap">
+    <!-- Shown when email already exists in Supabase -->
+    <div class="duplicate-banner" id="existingCustomerBanner" role="alert" style="background:#FEF9E7; border-color:#F39C12; color:#7D6608;">
+    </div>
+
+    <div class="form-fields-wrap" id="formFieldsWrap" autocomplete="off">
 
       <!-- Personal Information -->
       <div class="form-section">
