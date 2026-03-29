@@ -56,11 +56,11 @@ document.addEventListener('DOMContentLoaded', async function () {
   });
   document.getElementById('saveActivityBtn').addEventListener('click', saveActivity);
 
-  document.getElementById('closeViewDayBtn').addEventListener('click', function () {
-    document.getElementById('viewDayModal').classList.remove('is-open');
-  });
-  document.getElementById('viewDayModal').addEventListener('click', function (e) {
-    if (e.target === this) this.classList.remove('is-open');
+  /* Day popup close handlers */
+  document.getElementById('dayPopupClose').addEventListener('click', closeDayPopup);
+  document.getElementById('dayPopupBackdrop').addEventListener('click', closeDayPopup);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeDayPopup();
   });
 });
 
@@ -238,12 +238,12 @@ async function renderCalendar() {
 
     var cellClass = 'cal5-cell' + (isToday ? ' today' : '') + (isPast ? ' past' : '');
 
-    body += '<div class="' + cellClass + '" onclick="openViewDay(\'' + ds + '\')">' +
+    body += '<div class="' + cellClass + '" onclick="openViewDay(\'' + ds + '\', this)">' +
       '<div class="cal5-day-num' + (isToday ? ' today-num' : '') + '">' +
         '<span>' + d.getDate() + '</span>' +
         '<div class="cal5-controls">' +
           '<button class="cal5-btn plus" title="Add activity" onclick="event.stopPropagation(); openAddActivity(\'' + ds + '\')">+</button>' +
-          '<button class="cal5-btn minus" title="View/edit" onclick="event.stopPropagation(); openViewDay(\'' + ds + '\')">−</button>' +
+          '<button class="cal5-btn minus" title="View/edit" onclick="event.stopPropagation(); openViewDay(\'' + ds + '\', this.closest(\'.cal5-cell\'))">−</button>' +
         '</div>' +
       '</div>' +
       chips +
@@ -335,45 +335,114 @@ async function saveActivity() {
 }
 
 /* ── View day schedule modal ──────────────────────────────*/
-async function openViewDay(dateStr) {
-  var modal  = document.getElementById('viewDayModal');
-  var listEl = document.getElementById('viewDayList');
-  document.getElementById('viewDayTitle').textContent = formatDisplayDate(dateStr);
-  listEl.innerHTML = '<p style="color:var(--color-ink-muted); font-size:0.9rem; padding:0.5rem 0;">Loading…</p>';
-  modal.classList.add('is-open');
+/* ── Popup positioning engine ─────────────────────────────*/
+function positionPopup(cellEl) {
+  var popup = document.getElementById('dayPopup');
+  if (!popup || !cellEl) return;
 
+  var rect  = cellEl.getBoundingClientRect();
+  var popW  = 300;
+  var popH  = 340;   /* estimated max height */
+  var vw    = window.innerWidth;
+  var vh    = window.innerHeight;
+
+  /* Default: open below the cell */
+  var top  = rect.bottom + 6;
+  var left = rect.left;
+
+  /* Clamp right edge */
+  if (left + popW > vw - 12) left = vw - popW - 12;
+  if (left < 8) left = 8;
+
+  /* Determine arrow side */
+  popup.classList.remove('arrow-right', 'opens-up');
+  if (left > rect.left + 20) popup.classList.add('arrow-right');
+
+  /* Flip upward if not enough space below */
+  if (top + popH > vh - 16) {
+    top = rect.top - popH - 6;
+    if (top < 8) top = 8;
+    popup.classList.add('opens-up');
+  }
+
+  popup.style.top  = top  + 'px';
+  popup.style.left = left + 'px';
+}
+
+function closeDayPopup() {
+  document.getElementById('dayPopup').classList.remove('is-open');
+  document.getElementById('dayPopupBackdrop').classList.remove('is-open');
+}
+
+/* ── Open day schedule popup ─────────────────────────────*/
+async function openViewDay(dateStr, cellEl) {
+  var popup    = document.getElementById('dayPopup');
+  var body     = document.getElementById('dayPopupBody');
+  var titleEl  = document.getElementById('dayPopupTitle');
+  var subEl    = document.getElementById('dayPopupSubtitle');
+  var addBtn   = document.getElementById('dayPopupAddBtn');
+
+  /* Format date for header */
+  var d       = new Date(dateStr + 'T00:00:00');
+  var dayName = d.toLocaleDateString('en-CA', { weekday: 'long' });
+  var dateFmt = d.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  titleEl.textContent = dayName;
+  subEl.textContent   = dateFmt;
+
+  /* Show loading state */
+  body.innerHTML = '<div class="day-popup-empty"><div class="day-popup-empty-icon">⏳</div>Loading…</div>';
+
+  /* Position popup near clicked cell before showing */
+  if (cellEl) positionPopup(cellEl);
+
+  popup.classList.add('is-open');
+  document.getElementById('dayPopupBackdrop').classList.add('is-open');
+
+  /* Wire Add button */
+  addBtn.onclick = function () {
+    closeDayPopup();
+    openAddActivity(dateStr);
+  };
+
+  /* Fetch activities */
   var res = await DAM.db().from('activities')
     .select('*').eq('user_id', currentUser.id).is('group_id', null)
     .eq('activity_date', dateStr).order('from_time');
   var acts = res.data || [];
 
   if (!acts.length) {
-    listEl.innerHTML = '<p style="color:var(--color-ink-muted); font-size:0.9rem; padding:0.5rem 0; text-align:center;">No activities scheduled for this day.<br/><span style="font-size:0.82rem;">Click the + button to add one.</span></p>';
+    body.innerHTML =
+      '<div class="day-popup-empty">' +
+        '<div class="day-popup-empty-icon">📭</div>' +
+        'No activities scheduled' +
+      '</div>';
     return;
   }
 
-  listEl.innerHTML = acts.map(function (a) {
+  body.innerHTML = acts.map(function (a) {
     var icon = ACTIVITY_ICONS[a.activity] || '📌';
     var dot  = getStatusDot(a, dateStr);
-    var loc  = a.location ? '<div class="schedule-item-loc">📍 ' + esc(a.location) + '</div>' : '';
-    return '<div class="schedule-item">' +
-      '<div class="schedule-item-icon">' + icon + '</div>' +
-      '<div class="schedule-item-body">' +
-        '<div class="schedule-item-name" style="display:flex; align-items:center; gap:6px;">' + dot + esc(a.activity) + '</div>' +
-        '<div class="schedule-item-time">🕐 ' + fmt12h(a.from_time) + ' – ' + fmt12h(a.end_time) + '</div>' +
+    var loc  = a.location
+      ? '<div class="day-popup-item-loc">📍 ' + esc(a.location) + '</div>'
+      : '';
+    return '<div class="day-popup-item">' +
+      '<div class="day-popup-item-icon">' + icon + '</div>' +
+      '<div class="day-popup-item-body">' +
+        '<div class="day-popup-item-name">' + dot + esc(a.activity) + '</div>' +
+        '<div class="day-popup-item-time">🕐 ' + fmt12h(a.from_time) + ' – ' + fmt12h(a.end_time) + '</div>' +
         loc +
       '</div>' +
-      '<button onclick="deleteActivity(\'' + a.id + '\',\'' + dateStr + '\')" ' +
-        'title="Remove" style="background:none; border:none; cursor:pointer; color:#E74C3C; font-size:1.1rem; padding:0.25rem; border-radius:6px; transition:background 0.12s;" ' +
-        'onmouseover="this.style.background=\'#FADBD8\'" onmouseout="this.style.background=\'none\'">🗑</button>' +
+      '<button class="day-popup-delete" title="Remove" ' +
+        'onclick="deleteActivityPopup(\'' + a.id + '\',\'' + dateStr + '\')">🗑</button>' +
     '</div>';
   }).join('');
 }
 
-async function deleteActivity(actId, dateStr) {
+async function deleteActivityPopup(actId, dateStr) {
   if (!confirm('Remove this activity?')) return;
   await DAM.db().from('activities').delete().eq('id', actId);
-  await openViewDay(dateStr);
+  await openViewDay(dateStr, null);  /* refresh popup in place */
   await renderCalendar();
 }
 

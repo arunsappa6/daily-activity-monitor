@@ -7,10 +7,11 @@
 /* ── Calendar wrapper ───────────────────────────────────── */
 .cal5-wrap {
   border-radius: 16px;
-  overflow: hidden;
+  overflow: visible;              /* must be visible so popup can escape */
   box-shadow: 0 4px 24px rgba(0,0,0,0.10);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
+  position: relative;
 }
 
 /* ── Header row ─────────────────────────────────────────── */
@@ -546,4 +547,263 @@
   .cal5-activity { font-size: 0.62rem; padding: 2px 3px; }
   .cal5-header-cell .hdr-date { font-size: 1rem; }
   .cal5-tooltip { min-width: 160px; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Day-click popup — small inline popover anchored to the cell
+   ═══════════════════════════════════════════════════════════ */
+
+/* Backdrop — transparent, just catches outside clicks */
+.day-popup-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: transparent;
+}
+.day-popup-backdrop.is-open { display: block; }
+
+/* The popup card itself */
+.day-popup {
+  display: none;
+  position: absolute;
+  z-index: 210;
+  width: 300px;
+  max-width: 92vw;
+  background: #F4F6F8;           /* light grey as specified */
+  border: 1px solid #D0D7DE;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10);
+  overflow: hidden;
+  animation: popupIn 0.18s ease;
+}
+
+.day-popup.is-open { display: block; }
+
+@keyframes popupIn {
+  from { opacity: 0; transform: scale(0.94) translateY(-6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Arrow pointing up toward the clicked cell */
+.day-popup::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 24px;
+  width: 16px;
+  height: 16px;
+  background: #F4F6F8;
+  border-top: 1px solid #D0D7DE;
+  border-left: 1px solid #D0D7DE;
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+
+/* Arrow on right-side cells — flip position */
+.day-popup.arrow-right::before {
+  left: auto;
+  right: 24px;
+}
+
+/* Arrow below (popup opens upward) */
+.day-popup.opens-up::before {
+  top: auto;
+  bottom: -8px;
+  transform: rotate(225deg);
+}
+
+/* Popup header */
+.day-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0.9rem 0.55rem;
+  background: linear-gradient(135deg, #1B4F72, #2E86C1);
+  color: #fff;
+}
+
+.day-popup-title {
+  font-family: var(--font-heading, serif);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.day-popup-subtitle {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.78);
+  margin-top: 1px;
+}
+
+.day-popup-close {
+  background: rgba(255,255,255,0.18);
+  border: none;
+  border-radius: 50%;
+  width: 24px; height: 24px;
+  color: #fff;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  line-height: 1;
+  padding: 0;
+}
+.day-popup-close:hover { background: rgba(255,255,255,0.35); }
+
+/* Popup body */
+.day-popup-body {
+  padding: 0.6rem 0.75rem 0.75rem;
+  max-height: 280px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+/* No-activities message */
+.day-popup-empty {
+  text-align: center;
+  padding: 1.25rem 0.5rem;
+  color: #6B7280;
+  font-size: 0.85rem;
+}
+
+.day-popup-empty-icon {
+  font-size: 1.75rem;
+  margin-bottom: 0.4rem;
+}
+
+/* Individual activity row inside popup */
+.day-popup-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 9px;
+  padding: 0.55rem 0.7rem;
+  transition: box-shadow 0.12s, border-color 0.12s;
+}
+
+.day-popup-item:hover {
+  box-shadow: 0 2px 8px rgba(27,79,114,0.10);
+  border-color: #AED6F1;
+}
+
+.day-popup-item-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.day-popup-item-body { flex: 1; min-width: 0; }
+
+.day-popup-item-name {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.day-popup-item-time {
+  font-size: 0.76rem;
+  color: #2E86C1;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.day-popup-item-loc {
+  font-size: 0.72rem;
+  color: #6B7280;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Member name tag (group dashboard) */
+.day-popup-item-member {
+  font-size: 0.7rem;
+  color: #6B7280;
+  margin-top: 2px;
+}
+
+.day-popup-item-member strong {
+  color: #1B4F72;
+}
+
+/* Delete button on popup rows */
+.day-popup-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #E74C3C;
+  font-size: 0.95rem;
+  padding: 2px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  transition: background 0.12s;
+  align-self: center;
+}
+.day-popup-delete:hover { background: #FADBD8; }
+
+/* Add activity link at bottom of popup */
+.day-popup-add-row {
+  padding: 0.45rem 0.75rem 0.55rem;
+  border-top: 1px solid #E5E7EB;
+  background: #F9FAFB;
+}
+
+.day-popup-add-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1B4F72;
+  background: none;
+  border: 1.5px dashed #AED6F1;
+  border-radius: 7px;
+  padding: 0.45rem 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.day-popup-add-btn:hover {
+  background: #EBF5FB;
+  border-color: #2E86C1;
+  color: #2E86C1;
+}
+
+/* Scrollbar styling for popup body */
+.day-popup-body::-webkit-scrollbar { width: 4px; }
+.day-popup-body::-webkit-scrollbar-track { background: transparent; }
+.day-popup-body::-webkit-scrollbar-thumb { background: #D0D7DE; border-radius: 2px; }
+
+/* Day popup uses fixed positioning — set by JS from viewport coords */
+.day-popup {
+  position: fixed !important;
+}
+
+@media (max-width: 640px) {
+  .day-popup {
+    width: 260px;
+    position: fixed;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    bottom: auto !important;
+    right: auto !important;
+  }
+  .day-popup::before { display: none; }
 }

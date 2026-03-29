@@ -125,12 +125,11 @@ document.addEventListener('DOMContentLoaded', async function () {
   /* ── Activity modal ────────────────────────────────────── */
   setupActivityModal();
 
-  /* ── View Day modal ────────────────────────────────────── */
-  document.getElementById('closeViewDayBtn').addEventListener('click', function () {
-    document.getElementById('viewDayModal').classList.remove('is-open');
-  });
-  document.getElementById('viewDayModal').addEventListener('click', function (e) {
-    if (e.target === this) this.classList.remove('is-open');
+  /* ── Day popup close handlers ──────────────────────────── */
+  document.getElementById('dayPopupClose').addEventListener('click', closeDayPopup);
+  document.getElementById('dayPopupBackdrop').addEventListener('click', closeDayPopup);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeDayPopup();
   });
 
 });
@@ -287,12 +286,12 @@ async function renderCalendar() {
         }).join('') + (dayActs.length > 5 ? '<div class="cal5-tooltip-empty">+' + (dayActs.length-5) + ' more</div>' : '');
 
     var cls = 'cal5-cell' + (isToday ? ' today' : '') + (isPast ? ' past' : '');
-    bodyHtml += '<div class="' + cls + '" onclick="openViewDay(\'' + ds + '\')">' +
+    bodyHtml += '<div class="' + cls + '" onclick="openViewDay(\'' + ds + '\', this)">' +
       '<div class="cal5-day-num' + (isToday ? ' today-num' : '') + '">' +
         '<span>' + d.getDate() + '</span>' +
         '<div class="cal5-controls">' +
           '<button class="cal5-btn plus" title="Add activity" onclick="event.stopPropagation(); openAddActivity(\'' + ds + '\')">+</button>' +
-          '<button class="cal5-btn minus" title="View/Remove" onclick="event.stopPropagation(); openViewDay(\'' + ds + '\')">−</button>' +
+          '<button class="cal5-btn minus" title="View/Remove" onclick="event.stopPropagation(); openViewDay(\'' + ds + '\', this.closest(\'.cal5-cell\'))">−</button>' +
         '</div>' +
       '</div>' + chips +
       '<div class="cal5-tooltip">' + tipRows + '</div>' +
@@ -327,7 +326,8 @@ function openAddActivity(dateStr) {
 
 function openEditActivity(event, dateStr, actId) {
   event.stopPropagation();
-  openViewDay(dateStr);
+  var cellEl = event.target.closest('.cal5-cell');
+  openViewDay(dateStr, cellEl);
 }
 
 function setupActivityModal() {
@@ -390,57 +390,147 @@ function setupActivityModal() {
 }
 
 /* ── View Day Schedule Modal ──────────────────────────────*/
-async function openViewDay(dateStr) {
-  var modal   = document.getElementById('viewDayModal');
-  var listEl  = document.getElementById('viewDayList');
-  var titleEl = document.getElementById('viewDayTitle');
+/* ── Popup positioning (shared helper) ────────────────────*/
+function positionPopup(cellEl) {
+  var popup = document.getElementById('dayPopup');
+  if (!popup || !cellEl) return;
 
-  titleEl.textContent = formatDisplayDate(dateStr);
-  listEl.innerHTML    = '<p style="color:var(--color-ink-muted); font-size:0.9rem;">Loading…</p>';
-  modal.classList.add('is-open');
+  var rect  = cellEl.getBoundingClientRect();
+  var popW  = 300;
+  var popH  = 340;
+  var vw    = window.innerWidth;
+  var vh    = window.innerHeight;
 
-  /* Fetch activities for this date + group */
+  var top  = rect.bottom + 6;
+  var left = rect.left;
+
+  if (left + popW > vw - 12) left = vw - popW - 12;
+  if (left < 8) left = 8;
+
+  popup.classList.remove('arrow-right', 'opens-up');
+  if (left > rect.left + 20) popup.classList.add('arrow-right');
+
+  if (top + popH > vh - 16) {
+    top = rect.top - popH - 6;
+    if (top < 8) top = 8;
+    popup.classList.add('opens-up');
+  }
+
+  popup.style.top  = top  + 'px';
+  popup.style.left = left + 'px';
+}
+
+function closeDayPopup() {
+  document.getElementById('dayPopup').classList.remove('is-open');
+  document.getElementById('dayPopupBackdrop').classList.remove('is-open');
+}
+
+/* ── Open day popup ───────────────────────────────────────*/
+async function openViewDay(dateStr, cellEl) {
+  var popup   = document.getElementById('dayPopup');
+  var body    = document.getElementById('dayPopupBody');
+  var titleEl = document.getElementById('dayPopupTitle');
+  var subEl   = document.getElementById('dayPopupSubtitle');
+  var addBtn  = document.getElementById('dayPopupAddBtn');
+
+  /* Header text */
+  var d       = new Date(dateStr + 'T00:00:00');
+  var dayName = d.toLocaleDateString('en-CA', { weekday: 'long' });
+  var dateFmt = d.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  titleEl.textContent = selectedGroup ? (selectedGroup.name + ' — ' + dayName) : dayName;
+  subEl.textContent   = dateFmt;
+
+  /* Loading state */
+  body.innerHTML =
+    '<div class="day-popup-empty">' +
+      '<div class="day-popup-empty-icon">⏳</div>Loading…' +
+    '</div>';
+
+  /* Position and show */
+  if (cellEl) positionPopup(cellEl);
+  popup.classList.add('is-open');
+  document.getElementById('dayPopupBackdrop').classList.add('is-open');
+
+  /* Wire Add button */
+  addBtn.onclick = function () {
+    closeDayPopup();
+    openAddActivity(dateStr);
+  };
+
+  /* Fetch activities */
   var query = DAM.db().from('activities')
-    .select('*')
+    .select('*, profiles!activities_user_id_fkey(first_name, last_name)')
     .eq('activity_date', dateStr)
     .order('from_time');
 
   if (selectedGroup) query = query.eq('group_id', selectedGroup.id);
   else               query = query.eq('user_id', currentUser.id);
 
-  var res = await query;
+  var res  = await query;
   var acts = res.data || [];
 
-  if (acts.length === 0) {
-    listEl.innerHTML = '<p style="color:var(--color-ink-muted); font-size:0.9rem; padding:0.5rem 0;">No activities scheduled for this day.</p>';
+  /* If the join fails, fall back to plain activities query */
+  if (res.error) {
+    var fallback = await DAM.db().from('activities')
+      .select('*')
+      .eq('activity_date', dateStr)
+      .order('from_time');
+    if (selectedGroup) fallback = fallback.eq('group_id', selectedGroup.id);
+    else               fallback = fallback.eq('user_id', currentUser.id);
+    var fbRes = await fallback;
+    acts = fbRes.data || [];
+  }
+
+  if (!acts.length) {
+    body.innerHTML =
+      '<div class="day-popup-empty">' +
+        '<div class="day-popup-empty-icon">📭</div>' +
+        'No activities scheduled' +
+      '</div>';
     return;
   }
 
-  listEl.innerHTML = acts.map(function (a) {
-    var icon = ACTIVITY_ICONS[a.activity] || '📌';
-    var dot  = getStatusDot(a, dateStr);
-    var fromFmt = fmt12h(a.from_time);
-    var endFmt  = fmt12h(a.end_time);
-    var loc  = a.location ? '<div class="schedule-item-loc">📍 ' + esc(a.location) + '</div>' : '';
-    return [
-      '<div class="schedule-item">',
-        '<div class="schedule-item-icon">' + icon + '</div>',
-        '<div class="schedule-item-body">',
-          '<div class="schedule-item-name" style="display:flex;align-items:center;gap:6px;">' + dot + esc(a.activity) + '</div>',
-          '<div class="schedule-item-time">🕐 ' + fromFmt + ' – ' + endFmt + '</div>',
-          loc,
-        '</div>',
-        '<button onclick="deleteActivity(\'' + a.id + '\',\'' + dateStr + '\')" ' +
-          'style="background:none; border:none; cursor:pointer; color:#E74C3C; font-size:1rem; padding:0.25rem;" title="Remove">🗑</button>',
-      '</div>'
-    ].join('');
+  body.innerHTML = acts.map(function (a) {
+    var icon   = ACTIVITY_ICONS[a.activity] || '📌';
+    var dot    = getStatusDot(a, dateStr);
+    var loc    = a.location
+      ? '<div class="day-popup-item-loc">📍 ' + esc(a.location) + '</div>'
+      : '';
+
+    /* Show member name for group activities */
+    var memberLine = '';
+    if (selectedGroup && a.profiles) {
+      var fn = a.profiles.first_name || '';
+      var ln = a.profiles.last_name  || '';
+      if (fn || ln) {
+        memberLine = '<div class="day-popup-item-member">👤 <strong>' +
+          esc(fn + ' ' + ln).trim() + '</strong></div>';
+      }
+    }
+
+    /* Only allow deletion of own activities */
+    var deleteBtn = (a.user_id === currentUser.id)
+      ? '<button class="day-popup-delete" title="Remove" ' +
+          'onclick="deleteActivityPopup(\'' + a.id + '\',\'' + dateStr + '\')">🗑</button>'
+      : '';
+
+    return '<div class="day-popup-item">' +
+      '<div class="day-popup-item-icon">' + icon + '</div>' +
+      '<div class="day-popup-item-body">' +
+        '<div class="day-popup-item-name">' + dot + esc(a.activity) + '</div>' +
+        '<div class="day-popup-item-time">🕐 ' + fmt12h(a.from_time) + ' – ' + fmt12h(a.end_time) + '</div>' +
+        loc + memberLine +
+      '</div>' +
+      deleteBtn +
+    '</div>';
   }).join('');
 }
 
-async function deleteActivity(actId, dateStr) {
+async function deleteActivityPopup(actId, dateStr) {
   if (!confirm('Remove this activity?')) return;
   await DAM.db().from('activities').delete().eq('id', actId);
-  openViewDay(dateStr);
+  await openViewDay(dateStr, null);   /* refresh popup in place */
   if (selectedGroup) renderCalendar();
 }
 
