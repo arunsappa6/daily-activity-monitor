@@ -12,8 +12,71 @@ var ACTIVITY_ICONS = {
   'Dinner Prep':   '🍽️', 'Hydration':    '💧',
   'Personal Care': '🧴', 'Work':          '💼',
   'Drop kids':     '🚗', 'Pick-up kids':  '🏫',
-  'Learning':      '📖', 'Commute':       '🚌'
+  'Learning':      '📖', 'Commute':       '🚌',
+  'Prayer Time':   '🙏', 'Visit Spiritual Place': '⛪'
 };
+
+/* ── Build custom time picker ─────────────────────────── */
+function buildTimePicker(label, wrapperId) {
+  var wrap = document.getElementById(wrapperId);
+  if (!wrap) return;
+  var hSel = document.createElement('select');
+  hSel.className = 'time-sel'; hSel.id = 'tp_h_' + label;
+  hSel.setAttribute('aria-label', label + ' hour');
+  var hOpt = '<option value="">HH</option>';
+  for (var h = 1; h <= 12; h++) hOpt += '<option value="' + h + '">' + String(h).padStart(2,'0') + '</option>';
+  hSel.innerHTML = hOpt;
+  var sep = document.createElement('span');
+  sep.className = 'time-sep'; sep.textContent = ':';
+  var mSel = document.createElement('select');
+  mSel.className = 'time-sel'; mSel.id = 'tp_m_' + label;
+  mSel.setAttribute('aria-label', label + ' minute');
+  var mOpt = '<option value="">MM</option>';
+  for (var m = 0; m <= 59; m++) mOpt += '<option value="' + m + '">' + String(m).padStart(2,'0') + '</option>';
+  mSel.innerHTML = mOpt;
+  var ampm = document.createElement('select');
+  ampm.className = 'time-ampm'; ampm.id = 'tp_ap_' + label;
+  ampm.innerHTML = '<option value="AM">AM</option><option value="PM">PM</option>';
+  wrap.appendChild(hSel); wrap.appendChild(sep); wrap.appendChild(mSel); wrap.appendChild(ampm);
+}
+
+function getTimePickerValue(label) {
+  var h = document.getElementById('tp_h_' + label);
+  var m = document.getElementById('tp_m_' + label);
+  var ap = document.getElementById('tp_ap_' + label);
+  if (!h || !m || !h.value || !m.value) return null;
+  var hour = parseInt(h.value);
+  var ap_v = ap ? ap.value : 'AM';
+  if (ap_v === 'PM' && hour !== 12) hour += 12;
+  if (ap_v === 'AM' && hour === 12) hour = 0;
+  return String(hour).padStart(2,'0') + ':' + String(m.value).padStart(2,'0') + ':00';
+}
+
+function resetTimePicker(label) {
+  ['tp_h_','tp_m_','tp_ap_'].forEach(function (pfx) {
+    var el = document.getElementById(pfx + label);
+    if (el) el.selectedIndex = 0;
+  });
+}
+
+/* ── Status dot ─────────────────────────────────────────── */
+function getStatusDot(act, dateStr) {
+  var now = new Date();
+  var todayStr = toDateStr(now);
+  if (dateStr !== todayStr) {
+    var actDate = new Date(dateStr + 'T00:00:00');
+    if (actDate < now) return '<span class="cal5-status-dot done"></span>';
+    return '<span class="cal5-status-dot upcoming"></span>';
+  }
+  var nowMins = now.getHours() * 60 + now.getMinutes();
+  var fromP = (act.from_time||'00:00').split(':');
+  var endP  = (act.end_time ||'00:00').split(':');
+  var fMins = parseInt(fromP[0]) * 60 + parseInt(fromP[1]);
+  var eMins = parseInt(endP[0])  * 60 + parseInt(endP[1]);
+  if (nowMins >= fMins && nowMins <= eMins) return '<span class="cal5-status-dot active"></span>';
+  if (nowMins < fMins) return '<span class="cal5-status-dot upcoming"></span>';
+  return '<span class="cal5-status-dot done"></span>';
+}
 
 var currentUser    = null;
 var currentProfile = null;
@@ -149,85 +212,95 @@ function selectGroup(group) {
 /* ── 5-Day Calendar Renderer ──────────────────────────────*/
 async function renderCalendar() {
   var root = document.getElementById('calendarRoot');
-  root.innerHTML = '<p style="padding:1rem; color:var(--color-ink-muted);">Loading schedule…</p>';
+  root.innerHTML = '<p style="padding:1rem; color:var(--color-ink-muted); text-align:center;">Loading schedule…</p>';
 
-  /* Calculate 5 days starting from Monday of the selected week */
   var today = new Date();
   var monday = new Date(today);
-  var dayOfWeek = today.getDay() || 7; // make Sunday = 7
+  var dayOfWeek = today.getDay() || 7;
   monday.setDate(today.getDate() - dayOfWeek + 1 + (calWeekOffset * 5));
 
   var days = [];
   for (var i = 0; i < 5; i++) {
-    var d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    days.push(d);
+    var d = new Date(monday); d.setDate(monday.getDate() + i); days.push(d);
   }
 
   var todayStr = toDateStr(today);
-
-  /* Fetch activities for this group for these 5 days */
   var dateFrom = toDateStr(days[0]);
   var dateTo   = toDateStr(days[4]);
 
   var actRes = await DAM.db()
-    .from('activities')
-    .select('*')
+    .from('activities').select('*')
     .eq('group_id', selectedGroup.id)
     .gte('activity_date', dateFrom)
     .lte('activity_date', dateTo)
     .order('from_time');
-
   var acts = actRes.data || [];
 
-  /* Build calendar HTML */
+  /* Header */
   var headerHtml = '<div class="cal5-header">';
-  var bodyHtml   = '<div class="cal5-grid">';
-
-  var weekdays = ['Mon','Tue','Wed','Thu','Fri'];
-
-  days.forEach(function (d, i) {
-    var ds = toDateStr(d);
-    var isToday = ds === todayStr;
-    headerHtml += '<div class="cal5-header-cell' + (isToday ? ' today' : '') + '">' +
-      weekdays[i] + ' ' + d.getDate() + '/' + (d.getMonth()+1) +
-    '</div>';
-  });
-  headerHtml += '</div>';
-
   days.forEach(function (d) {
     var ds = toDateStr(d);
     var isToday = ds === todayStr;
+    var dayAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+    if (isToday) {
+      headerHtml += '<div class="cal5-header-cell today">' +
+        '<span class="hdr-day">' + dayAbbr + '</span>' +
+        '<span class="hdr-date">' + d.getDate() + '</span></div>';
+    } else {
+      headerHtml += '<div class="cal5-header-cell">' +
+        '<span class="hdr-day">' + dayAbbr + '</span>' +
+        '<span class="hdr-date" style="font-size:1.1rem;font-weight:700;color:#fff;display:block;margin-top:2px;">' + d.getDate() + '</span></div>';
+    }
+  });
+  headerHtml += '</div>';
+
+  /* Grid */
+  var bodyHtml = '<div class="cal5-grid">';
+  days.forEach(function (d) {
+    var ds      = toDateStr(d);
+    var isToday = ds === todayStr;
+    var isPast  = d < today && !isToday;
     var dayActs = acts.filter(function (a) { return a.activity_date === ds; });
 
     var chips = '';
-    var maxShow = 3;
-    dayActs.slice(0, maxShow).forEach(function (a) {
+    dayActs.slice(0, 3).forEach(function (a) {
       var icon = ACTIVITY_ICONS[a.activity] || '📌';
-      chips += '<div class="cal5-activity" data-id="' + a.id + '" onclick="openEditActivity(event,\'' + ds + '\',\'' + a.id + '\')">' +
+      var dot  = getStatusDot(a, ds);
+      chips += '<div class="cal5-activity" onclick="openEditActivity(event,\'' + ds + '\',\'' + a.id + '\')">' +
+        dot +
         '<span class="cal5-activity-icon">' + icon + '</span>' +
         '<span class="cal5-activity-text">' + esc(a.activity) + '</span>' +
       '</div>';
     });
-    if (dayActs.length > maxShow) {
-      chips += '<div class="cal5-more">+' + (dayActs.length - maxShow) + ' more</div>';
-    }
+    if (dayActs.length > 3) chips += '<div class="cal5-more">+' + (dayActs.length - 3) + ' more</div>';
 
-    bodyHtml += '<div class="cal5-cell' + (isToday ? ' today' : '') + '" onclick="openViewDay(\'' + ds + '\')">' +
+    /* Hover tooltip */
+    var tipRows = dayActs.length === 0
+      ? '<div class="cal5-tooltip-empty">No activities</div>'
+      : dayActs.slice(0,5).map(function (a) {
+          return '<div class="cal5-tooltip-row">' +
+            '<span class="cal5-tooltip-icon">' + (ACTIVITY_ICONS[a.activity]||'📌') + '</span>' +
+            '<span><div class="cal5-tooltip-name">' + esc(a.activity) + '</div>' +
+            '<div class="cal5-tooltip-time">' + fmt12h(a.from_time) + '–' + fmt12h(a.end_time) +
+              (a.location ? ' · ' + esc(a.location) : '') + '</div></span>' +
+          '</div>';
+        }).join('') + (dayActs.length > 5 ? '<div class="cal5-tooltip-empty">+' + (dayActs.length-5) + ' more</div>' : '');
+
+    var cls = 'cal5-cell' + (isToday ? ' today' : '') + (isPast ? ' past' : '');
+    bodyHtml += '<div class="' + cls + '" onclick="openViewDay(\'' + ds + '\')">' +
       '<div class="cal5-day-num' + (isToday ? ' today-num' : '') + '">' +
         '<span>' + d.getDate() + '</span>' +
         '<div class="cal5-controls">' +
-          '<button class="cal5-btn plus" title="Add activity" onclick="event.stopPropagation(); openAddActivity(\'' + ds + '\')"  >+</button>' +
-          '<button class="cal5-btn minus" title="Edit/Remove" onclick="event.stopPropagation(); openViewDay(\'' + ds + '\')"   >−</button>' +
+          '<button class="cal5-btn plus" title="Add activity" onclick="event.stopPropagation(); openAddActivity(\'' + ds + '\')">+</button>' +
+          '<button class="cal5-btn minus" title="View/Remove" onclick="event.stopPropagation(); openViewDay(\'' + ds + '\')">−</button>' +
         '</div>' +
-      '</div>' +
-      chips +
+      '</div>' + chips +
+      '<div class="cal5-tooltip">' + tipRows + '</div>' +
     '</div>';
   });
-
   bodyHtml += '</div>';
 
-  root.innerHTML = headerHtml + bodyHtml;
+  root.innerHTML = '<div class="cal5-wrap">' + headerHtml + bodyHtml + '</div>';
 }
 
 /* ── Add Activity Modal ────────────────────────────────── */
@@ -240,11 +313,14 @@ function openAddActivity(dateStr) {
   document.getElementById('addActivityTitle').textContent = 'Add Activity';
   document.getElementById('addActivityDate').textContent  = formatDisplayDate(dateStr);
   document.getElementById('activityType').value     = '';
-  document.getElementById('activityFrom').value     = '';
-  document.getElementById('activityEnd').value      = '';
   document.getElementById('activityLocation').value = '';
+  resetTimePicker('From');
+  resetTimePicker('End');
   ['activityTypeErr','activityFromErr','activityEndErr','activityGenErr'].forEach(function (id) {
-    document.getElementById(id).classList.remove('visible');
+    var el = document.getElementById(id); if (el) el.classList.remove('visible');
+  });
+  ['activityFromWrap','activityEndWrap'].forEach(function (id) {
+    var el = document.getElementById(id); if (el) el.classList.remove('is-error');
   });
   document.getElementById('addActivityModal').classList.add('is-open');
 }
@@ -255,6 +331,10 @@ function openEditActivity(event, dateStr, actId) {
 }
 
 function setupActivityModal() {
+  /* Build time pickers */
+  buildTimePicker('From', 'activityFromWrap');
+  buildTimePicker('End',  'activityEndWrap');
+
   document.getElementById('cancelActivityBtn').addEventListener('click', function () {
     document.getElementById('addActivityModal').classList.remove('is-open');
   });
@@ -264,8 +344,8 @@ function setupActivityModal() {
 
   document.getElementById('saveActivityBtn').addEventListener('click', async function () {
     var type  = document.getElementById('activityType').value;
-    var from  = document.getElementById('activityFrom').value;
-    var end   = document.getElementById('activityEnd').value;
+    var from  = getTimePickerValue('From');
+    var end   = getTimePickerValue('End');
     var loc   = document.getElementById('activityLocation').value.trim();
 
     var valid = true;
@@ -338,15 +418,17 @@ async function openViewDay(dateStr) {
 
   listEl.innerHTML = acts.map(function (a) {
     var icon = ACTIVITY_ICONS[a.activity] || '📌';
+    var dot  = getStatusDot(a, dateStr);
     var fromFmt = fmt12h(a.from_time);
     var endFmt  = fmt12h(a.end_time);
-    var loc     = a.location ? ' — ' + esc(a.location) : '';
+    var loc  = a.location ? '<div class="schedule-item-loc">📍 ' + esc(a.location) + '</div>' : '';
     return [
       '<div class="schedule-item">',
         '<div class="schedule-item-icon">' + icon + '</div>',
         '<div class="schedule-item-body">',
-          '<div class="schedule-item-name">' + esc(a.activity) + '</div>',
-          '<div class="schedule-item-time">' + fromFmt + ' to ' + endFmt + loc + '</div>',
+          '<div class="schedule-item-name" style="display:flex;align-items:center;gap:6px;">' + dot + esc(a.activity) + '</div>',
+          '<div class="schedule-item-time">🕐 ' + fromFmt + ' – ' + endFmt + '</div>',
+          loc,
         '</div>',
         '<button onclick="deleteActivity(\'' + a.id + '\',\'' + dateStr + '\')" ' +
           'style="background:none; border:none; cursor:pointer; color:#E74C3C; font-size:1rem; padding:0.25rem;" title="Remove">🗑</button>',

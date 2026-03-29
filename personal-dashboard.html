@@ -38,6 +38,8 @@
         <h1 class="page-title">My Dashboard</h1>
         <p class="page-subtitle">Your personal activity schedule.</p>
       </div>
+      <span class="cal-week-label" id="calWeekLabel"></span>
+      </div>
       <div style="display:flex; gap:0.5rem;">
         <button class="cal-nav-btn" id="calPrev">‹ Prev</button>
         <button class="cal-nav-btn" id="calNext">Next ›</button>
@@ -96,6 +98,8 @@
               <option value="Pick-up kids">🏫 Pick-up kids</option>
               <option value="Learning">📖 Learning</option>
               <option value="Commute">🚌 Commute</option>
+              <option value="Prayer Time">🙏 Prayer Time</option>
+              <option value="Visit Spiritual Place">⛪ Visit Spiritual Place</option>
             </select>
           </div>
           <span class="field-error" id="activityTypeErr">⚠ Please select an activity.</span>
@@ -103,13 +107,13 @@
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
           <div class="form-group">
             <label for="activityFrom">From Time <span class="required">*</span></label>
-            <input type="time" id="activityFrom" />
-            <span class="field-error" id="activityFromErr">⚠ Required.</span>
+            <div class="time-picker-wrap" id="activityFromWrap"></div>
+            <span class="field-error" id="activityFromErr">⚠ Please select a from time.</span>
           </div>
           <div class="form-group">
             <label for="activityEnd">End Time <span class="required">*</span></label>
-            <input type="time" id="activityEnd" />
-            <span class="field-error" id="activityEndErr">⚠ Required.</span>
+            <div class="time-picker-wrap" id="activityEndWrap"></div>
+            <span class="field-error" id="activityEndErr">⚠ Please select an end time.</span>
           </div>
         </div>
         <div class="form-group">

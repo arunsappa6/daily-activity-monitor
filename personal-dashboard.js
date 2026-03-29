@@ -1,19 +1,24 @@
 /* ═══════════════════════════════════════════════════════════
-   DAILY ACTIVITY MONITOR — personal-dashboard.js
-   Personal 5-day calendar, activity add/view/delete
+   DAILY ACTIVITY MONITOR — personal-dashboard.js  (v2)
+   • New activities: Prayer Time, Visit Spiritual Place
+   • Custom time dropdowns (H/M/AM-PM)
+   • Hover tooltip showing scheduled activities
+   • Status dots: green (active now), red (upcoming), grey (done)
    ═══════════════════════════════════════════════════════════ */
 
 var ACTIVITY_ICONS = {
   'Cycling':'🚴','Jogging':'🏃','Reading':'📚','Gardening':'🌱',
   'Breakfast Prep':'🍳','Lunch Prep':'🥗','Dinner Prep':'🍽️',
   'Hydration':'💧','Personal Care':'🧴','Work':'💼',
-  'Drop kids':'🚗','Pick-up kids':'🏫','Learning':'📖','Commute':'🚌'
+  'Drop kids':'🚗','Pick-up kids':'🏫','Learning':'📖','Commute':'🚌',
+  'Prayer Time':'🙏','Visit Spiritual Place':'⛪'
 };
 
-var currentUser  = null;
-var calWeekOffset= 0;
-var pendingDate  = null;
+var currentUser   = null;
+var calWeekOffset = 0;
+var pendingDate   = null;
 
+/* ── Init ─────────────────────────────────────────────────*/
 document.addEventListener('DOMContentLoaded', async function () {
 
   await new Promise(function (r) { setTimeout(r, 500); });
@@ -22,24 +27,27 @@ document.addEventListener('DOMContentLoaded', async function () {
   currentUser = session ? session.user : null;
   if (!currentUser) return;
 
-  /* Fill profile summary */
+  /* Profile summary tiles */
   var pRes = await DAM.db().from('profiles')
     .select('first_name, last_name').eq('id', currentUser.id).single();
   var p = pRes.data || {};
-  document.getElementById('pName').textContent      = ((p.first_name||'') + ' ' + (p.last_name||'')).trim() || '—';
-  document.getElementById('pEmail').textContent     = currentUser.email || '—';
+  document.getElementById('pName').textContent = ((p.first_name||'') + ' ' + (p.last_name||'')).trim() || '—';
+  document.getElementById('pEmail').textContent = currentUser.email || '—';
   document.getElementById('pLastVisit').textContent = currentUser.last_sign_in_at
-    ? new Date(currentUser.last_sign_in_at).toLocaleDateString('en-CA', {month:'short', day:'numeric', year:'numeric'})
+    ? new Date(currentUser.last_sign_in_at).toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'})
     : 'Today';
 
-  /* Render calendar */
   await renderCalendar();
 
   /* Navigation */
   document.getElementById('calPrev').addEventListener('click', async function () { calWeekOffset--; await renderCalendar(); });
   document.getElementById('calNext').addEventListener('click', async function () { calWeekOffset++; await renderCalendar(); });
 
-  /* Add activity modal */
+  /* Build custom time pickers */
+  buildTimePicker('From', 'activityFromWrap');
+  buildTimePicker('End',  'activityEndWrap');
+
+  /* Modal close handlers */
   document.getElementById('cancelActivityBtn').addEventListener('click', function () {
     document.getElementById('addActivityModal').classList.remove('is-open');
   });
@@ -48,7 +56,6 @@ document.addEventListener('DOMContentLoaded', async function () {
   });
   document.getElementById('saveActivityBtn').addEventListener('click', saveActivity);
 
-  /* View day modal close */
   document.getElementById('closeViewDayBtn').addEventListener('click', function () {
     document.getElementById('viewDayModal').classList.remove('is-open');
   });
@@ -57,10 +64,92 @@ document.addEventListener('DOMContentLoaded', async function () {
   });
 });
 
-/* ── 5-day personal calendar ─────────────────────────────*/
+/* ── Build custom time picker dropdowns ───────────────────*/
+function buildTimePicker(label, wrapperId) {
+  var wrap = document.getElementById(wrapperId);
+  if (!wrap) return;
+
+  /* Hours 1–12 */
+  var hSel = document.createElement('select');
+  hSel.className = 'time-sel'; hSel.id = 'tp_h_' + label;
+  hSel.setAttribute('aria-label', label + ' hour');
+  var hOpt = '<option value="">HH</option>';
+  for (var h = 1; h <= 12; h++) hOpt += '<option value="' + h + '">' + String(h).padStart(2,'0') + '</option>';
+  hSel.innerHTML = hOpt;
+
+  /* Separator */
+  var sep = document.createElement('span');
+  sep.className = 'time-sep'; sep.textContent = ':';
+
+  /* Minutes 00–59 */
+  var mSel = document.createElement('select');
+  mSel.className = 'time-sel'; mSel.id = 'tp_m_' + label;
+  mSel.setAttribute('aria-label', label + ' minute');
+  var mOpt = '<option value="">MM</option>';
+  for (var m = 0; m <= 59; m++) mOpt += '<option value="' + m + '">' + String(m).padStart(2,'0') + '</option>';
+  mSel.innerHTML = mOpt;
+
+  /* AM / PM */
+  var ampm = document.createElement('select');
+  ampm.className = 'time-ampm'; ampm.id = 'tp_ap_' + label;
+  ampm.setAttribute('aria-label', label + ' AM PM');
+  ampm.innerHTML = '<option value="AM">AM</option><option value="PM">PM</option>';
+
+  wrap.appendChild(hSel);
+  wrap.appendChild(sep);
+  wrap.appendChild(mSel);
+  wrap.appendChild(ampm);
+}
+
+/* ── Read time picker value as HH:MM (24h) ───────────────*/
+function getTimePickerValue(label) {
+  var h  = document.getElementById('tp_h_' + label);
+  var m  = document.getElementById('tp_m_' + label);
+  var ap = document.getElementById('tp_ap_' + label);
+  if (!h || !m || !h.value || !m.value) return null;
+  var hour = parseInt(h.value);
+  var ap_v = ap ? ap.value : 'AM';
+  if (ap_v === 'PM' && hour !== 12) hour += 12;
+  if (ap_v === 'AM' && hour === 12) hour = 0;
+  return String(hour).padStart(2,'0') + ':' + String(m.value).padStart(2,'0') + ':00';
+}
+
+function resetTimePicker(label) {
+  ['tp_h_','tp_m_','tp_ap_'].forEach(function (pfx) {
+    var el = document.getElementById(pfx + label);
+    if (el) el.selectedIndex = 0;
+  });
+}
+
+/* ── Status dot for an activity ──────────────────────────*/
+function getStatusDot(act, dateStr) {
+  var now     = new Date();
+  var todayStr= toDateStr(now);
+  if (dateStr !== todayStr) {
+    /* Past or future date */
+    var actDate = new Date(dateStr + 'T00:00:00');
+    if (actDate < now) return '<span class="cal5-status-dot done"></span>';
+    return '<span class="cal5-status-dot upcoming"></span>';
+  }
+  /* Today — compare times */
+  var nowMins   = now.getHours() * 60 + now.getMinutes();
+  var fromParts = (act.from_time||'00:00').split(':');
+  var endParts  = (act.end_time ||'00:00').split(':');
+  var fromMins  = parseInt(fromParts[0]) * 60 + parseInt(fromParts[1]);
+  var endMins   = parseInt(endParts[0])  * 60 + parseInt(endParts[1]);
+  if (nowMins >= fromMins && nowMins <= endMins) {
+    return '<span class="cal5-status-dot active"></span>';
+  }
+  if (nowMins < fromMins) {
+    return '<span class="cal5-status-dot upcoming"></span>';
+  }
+  return '<span class="cal5-status-dot done"></span>';
+}
+
+/* ── 5-Day calendar renderer ─────────────────────────────*/
 async function renderCalendar() {
-  var root  = document.getElementById('calendarRoot');
-  root.innerHTML = '<p style="color:var(--color-ink-muted); padding:1rem;">Loading…</p>';
+  var root = document.getElementById('calendarRoot');
+  root.innerHTML = '<p style="color:var(--color-ink-muted); padding:1.5rem; text-align:center;">Loading your schedule…</p>';
 
   var today  = new Date();
   var monday = new Date(today);
@@ -76,87 +165,151 @@ async function renderCalendar() {
   var dateFrom = toDateStr(days[0]);
   var dateTo   = toDateStr(days[4]);
 
+  /* Week label */
+  var wkLabel = formatShort(days[0]) + ' – ' + formatShort(days[4]);
+  var weekLabelEl = document.getElementById('calWeekLabel');
+  if (weekLabelEl) weekLabelEl.textContent = wkLabel;
+
   var actRes = await DAM.db()
-    .from('activities')
-    .select('*')
-    .eq('user_id', currentUser.id)
-    .is('group_id', null)
-    .gte('activity_date', dateFrom)
-    .lte('activity_date', dateTo)
+    .from('activities').select('*')
+    .eq('user_id', currentUser.id).is('group_id', null)
+    .gte('activity_date', dateFrom).lte('activity_date', dateTo)
     .order('from_time');
   var acts = actRes.data || [];
 
-  var weekdays = ['Mon','Tue','Wed','Thu','Fri'];
+  /* Build header */
   var header = '<div class="cal5-header">';
-  var body   = '<div class="cal5-grid">';
-
-  days.forEach(function (d, i) {
-    var isToday = toDateStr(d) === todayStr;
-    header += '<div class="cal5-header-cell' + (isToday ? ' today' : '') + '">' +
-      weekdays[i] + ' ' + d.getDate() + '/' + (d.getMonth()+1) + '</div>';
+  days.forEach(function (d) {
+    var ds = toDateStr(d);
+    var isToday = ds === todayStr;
+    var dayAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+    if (isToday) {
+      header += '<div class="cal5-header-cell today">' +
+        '<span class="hdr-day">' + dayAbbr + '</span>' +
+        '<span class="hdr-date">' + d.getDate() + '</span></div>';
+    } else {
+      header += '<div class="cal5-header-cell">' +
+        '<span class="hdr-day">' + dayAbbr + '</span>' +
+        '<span class="hdr-date" style="font-size:1.1rem; font-weight:700; color:#fff; display:block; margin-top:2px;">' + d.getDate() + '</span></div>';
+    }
   });
   header += '</div>';
 
+  /* Build grid */
+  var body = '<div class="cal5-grid">';
   days.forEach(function (d) {
     var ds      = toDateStr(d);
     var isToday = ds === todayStr;
+    var isPast  = d < today && !isToday;
     var dayActs = acts.filter(function (a) { return a.activity_date === ds; });
 
+    /* Activity chips (max 3 visible) */
     var chips = '';
     dayActs.slice(0, 3).forEach(function (a) {
       var icon = ACTIVITY_ICONS[a.activity] || '📌';
+      var dot  = getStatusDot(a, ds);
       chips += '<div class="cal5-activity">' +
+        dot +
         '<span class="cal5-activity-icon">' + icon + '</span>' +
         '<span class="cal5-activity-text">' + esc(a.activity) + '</span>' +
       '</div>';
     });
-    if (dayActs.length > 3) chips += '<div class="cal5-more">+' + (dayActs.length-3) + ' more</div>';
+    if (dayActs.length > 3) chips += '<div class="cal5-more">+' + (dayActs.length - 3) + ' more</div>';
 
-    body += '<div class="cal5-cell' + (isToday ? ' today' : '') + '" onclick="openViewDay(\'' + ds + '\')">' +
+    /* Hover tooltip */
+    var tipRows = '';
+    if (dayActs.length === 0) {
+      tipRows = '<div class="cal5-tooltip-empty">No activities</div>';
+    } else {
+      dayActs.slice(0, 5).forEach(function (a) {
+        var icon = ACTIVITY_ICONS[a.activity] || '📌';
+        tipRows += '<div class="cal5-tooltip-row">' +
+          '<span class="cal5-tooltip-icon">' + icon + '</span>' +
+          '<span>' +
+            '<div class="cal5-tooltip-name">' + esc(a.activity) + '</div>' +
+            '<div class="cal5-tooltip-time">' + fmt12h(a.from_time) + '–' + fmt12h(a.end_time) +
+              (a.location ? ' · ' + esc(a.location) : '') +
+            '</div>' +
+          '</span>' +
+        '</div>';
+      });
+      if (dayActs.length > 5) tipRows += '<div class="cal5-tooltip-empty">+' + (dayActs.length-5) + ' more</div>';
+    }
+
+    var cellClass = 'cal5-cell' + (isToday ? ' today' : '') + (isPast ? ' past' : '');
+
+    body += '<div class="' + cellClass + '" onclick="openViewDay(\'' + ds + '\')">' +
       '<div class="cal5-day-num' + (isToday ? ' today-num' : '') + '">' +
         '<span>' + d.getDate() + '</span>' +
         '<div class="cal5-controls">' +
-          '<button class="cal5-btn plus" title="Add" onclick="event.stopPropagation(); openAddActivity(\'' + ds + '\')">+</button>' +
-          '<button class="cal5-btn minus" title="View/Edit" onclick="event.stopPropagation(); openViewDay(\'' + ds + '\')">−</button>' +
+          '<button class="cal5-btn plus" title="Add activity" onclick="event.stopPropagation(); openAddActivity(\'' + ds + '\')">+</button>' +
+          '<button class="cal5-btn minus" title="View/edit" onclick="event.stopPropagation(); openViewDay(\'' + ds + '\')">−</button>' +
         '</div>' +
-      '</div>' + chips +
+      '</div>' +
+      chips +
+      '<div class="cal5-tooltip">' + tipRows + '</div>' +
     '</div>';
   });
-
   body += '</div>';
-  root.innerHTML = header + body;
+
+  root.innerHTML = '<div class="cal5-wrap">' + header + body + '</div>';
 }
 
+/* ── Open add activity modal ─────────────────────────────*/
 function openAddActivity(dateStr) {
   pendingDate = dateStr;
-  document.getElementById('addActivityDate').textContent  = formatDisplayDate(dateStr);
-  document.getElementById('activityType').value     = '';
-  document.getElementById('activityFrom').value     = '';
-  document.getElementById('activityEnd').value      = '';
+  document.getElementById('addActivityDate').textContent = formatDisplayDate(dateStr);
+  document.getElementById('activityType').value = '';
   document.getElementById('activityLocation').value = '';
+  resetTimePicker('From');
+  resetTimePicker('End');
   ['activityTypeErr','activityFromErr','activityEndErr','activityGenErr'].forEach(function (id) {
-    document.getElementById(id).classList.remove('visible');
+    var el = document.getElementById(id);
+    if (el) el.classList.remove('visible');
+  });
+  ['activityFromWrap','activityEndWrap'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.classList.remove('is-error');
   });
   document.getElementById('addActivityModal').classList.add('is-open');
 }
 
+/* ── Save activity ────────────────────────────────────────*/
 async function saveActivity() {
   var type = document.getElementById('activityType').value;
-  var from = document.getElementById('activityFrom').value;
-  var end  = document.getElementById('activityEnd').value;
+  var from = getTimePickerValue('From');
+  var end  = getTimePickerValue('End');
   var loc  = document.getElementById('activityLocation').value.trim();
   var valid = true;
 
   document.getElementById('activityGenErr').classList.remove('visible');
-  if (!type) { document.getElementById('activityTypeErr').classList.add('visible'); valid = false; }
-  else        { document.getElementById('activityTypeErr').classList.remove('visible'); }
-  if (!from)  { document.getElementById('activityFromErr').classList.add('visible'); valid = false; }
-  else        { document.getElementById('activityFromErr').classList.remove('visible'); }
-  if (!end)   { document.getElementById('activityEndErr').classList.add('visible'); valid = false; }
-  else        { document.getElementById('activityEndErr').classList.remove('visible'); }
+
+  if (!type) {
+    document.getElementById('activityTypeErr').classList.add('visible'); valid = false;
+  } else {
+    document.getElementById('activityTypeErr').classList.remove('visible');
+  }
+
+  if (!from) {
+    document.getElementById('activityFromErr').classList.add('visible');
+    document.getElementById('activityFromWrap').classList.add('is-error'); valid = false;
+  } else {
+    document.getElementById('activityFromErr').classList.remove('visible');
+    document.getElementById('activityFromWrap').classList.remove('is-error');
+  }
+
+  if (!end) {
+    document.getElementById('activityEndErr').classList.add('visible');
+    document.getElementById('activityEndWrap').classList.add('is-error'); valid = false;
+  } else {
+    document.getElementById('activityEndErr').classList.remove('visible');
+    document.getElementById('activityEndWrap').classList.remove('is-error');
+  }
+
   if (from && end && from >= end) {
     document.getElementById('activityGenErr').classList.add('visible'); valid = false;
   }
+
   if (!valid) return;
 
   var btn = document.getElementById('saveActivityBtn');
@@ -174,16 +327,19 @@ async function saveActivity() {
   });
 
   btn.textContent = 'Save Activity'; btn.disabled = false;
-  if (res.error) { alert('Error: ' + res.error.message); return; }
+
+  if (res.error) { alert('Error saving: ' + res.error.message); return; }
+
   document.getElementById('addActivityModal').classList.remove('is-open');
   await renderCalendar();
 }
 
+/* ── View day schedule modal ──────────────────────────────*/
 async function openViewDay(dateStr) {
   var modal  = document.getElementById('viewDayModal');
   var listEl = document.getElementById('viewDayList');
   document.getElementById('viewDayTitle').textContent = formatDisplayDate(dateStr);
-  listEl.innerHTML = '<p style="color:var(--color-ink-muted); font-size:0.9rem;">Loading…</p>';
+  listEl.innerHTML = '<p style="color:var(--color-ink-muted); font-size:0.9rem; padding:0.5rem 0;">Loading…</p>';
   modal.classList.add('is-open');
 
   var res = await DAM.db().from('activities')
@@ -192,21 +348,24 @@ async function openViewDay(dateStr) {
   var acts = res.data || [];
 
   if (!acts.length) {
-    listEl.innerHTML = '<p style="color:var(--color-ink-muted); font-size:0.9rem; padding:0.5rem 0;">No activities scheduled for this day.</p>';
+    listEl.innerHTML = '<p style="color:var(--color-ink-muted); font-size:0.9rem; padding:0.5rem 0; text-align:center;">No activities scheduled for this day.<br/><span style="font-size:0.82rem;">Click the + button to add one.</span></p>';
     return;
   }
 
   listEl.innerHTML = acts.map(function (a) {
     var icon = ACTIVITY_ICONS[a.activity] || '📌';
-    var loc  = a.location ? ' — ' + esc(a.location) : '';
+    var dot  = getStatusDot(a, dateStr);
+    var loc  = a.location ? '<div class="schedule-item-loc">📍 ' + esc(a.location) + '</div>' : '';
     return '<div class="schedule-item">' +
       '<div class="schedule-item-icon">' + icon + '</div>' +
       '<div class="schedule-item-body">' +
-        '<div class="schedule-item-name">' + esc(a.activity) + '</div>' +
-        '<div class="schedule-item-time">' + fmt12h(a.from_time) + ' to ' + fmt12h(a.end_time) + loc + '</div>' +
+        '<div class="schedule-item-name" style="display:flex; align-items:center; gap:6px;">' + dot + esc(a.activity) + '</div>' +
+        '<div class="schedule-item-time">🕐 ' + fmt12h(a.from_time) + ' – ' + fmt12h(a.end_time) + '</div>' +
+        loc +
       '</div>' +
       '<button onclick="deleteActivity(\'' + a.id + '\',\'' + dateStr + '\')" ' +
-        'style="background:none;border:none;cursor:pointer;color:#E74C3C;font-size:1rem;padding:0.25rem;" title="Remove">🗑</button>' +
+        'title="Remove" style="background:none; border:none; cursor:pointer; color:#E74C3C; font-size:1.1rem; padding:0.25rem; border-radius:6px; transition:background 0.12s;" ' +
+        'onmouseover="this.style.background=\'#FADBD8\'" onmouseout="this.style.background=\'none\'">🗑</button>' +
     '</div>';
   }).join('');
 }
@@ -218,17 +377,21 @@ async function deleteActivity(actId, dateStr) {
   await renderCalendar();
 }
 
-/* Utility */
+/* ── Utilities ────────────────────────────────────────────*/
 function toDateStr(d) {
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 function formatDisplayDate(ds) {
   var d = new Date(ds + 'T00:00:00');
   return d.toLocaleDateString('en-CA',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 }
+function formatShort(d) {
+  return d.toLocaleDateString('en-CA',{month:'short',day:'numeric'});
+}
 function fmt12h(t) {
-  if (!t) return ''; var p=t.split(':'); var h=parseInt(p[0]); var m=p[1];
-  return (h%12||12)+':'+m+(h>=12?' PM':' AM');
+  if (!t) return '';
+  var p = t.split(':'); var h = parseInt(p[0]); var m = p[1];
+  return (h%12||12) + ':' + m + (h>=12?' PM':' AM');
 }
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
