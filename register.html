@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#FFFFFF" />
+  <title>Register — Daily Activity Monitor</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <header class="navbar" id="navbar">
+    <div class="navbar-inner">
+      <div class="nav-brand"><a href="index.html">Daily Activity Monitor</a></div>
+      <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="nav-links" id="navLinks">
+        <a href="group-dashboard.html" class="nav-link">Group Dashboard</a>
+        <a href="personal-dashboard.html" class="nav-link">My Dashboard</a>
+        <a href="contact.html" class="nav-link">Contact Us</a>
+        <div class="nav-session">
+          <a href="login.html" class="nav-btn nav-btn--ghost">Login</a>
+          <a href="register.html" class="nav-btn nav-btn--solid">Register</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main class="register-main">
+
+    <div class="page-header">
+      <h1 class="page-title">Create Your Account</h1>
+      <p class="page-subtitle">Join Daily Activity Monitor — free for individuals &amp; families.</p>
+    </div>
+
+    <div class="age-gate-banner" id="ageGateBanner" role="alert">
+      ⛔ You do not have permission to access this website or App. You must be 18 years or older to register.
+    </div>
+
+    <div class="duplicate-banner" id="duplicateBanner" role="alert">
+      ⚠️ You are already registered. Please <a href="login.html">sign in here</a> instead.
+    </div>
+
+    <div class="form-fields-wrap" id="formFieldsWrap">
+
+      <!-- Personal Information -->
+      <div class="form-section">
+        <div class="form-section-title">Personal Information</div>
+
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label for="firstName">First Name <span class="required">*</span></label>
+            <input type="text" id="firstName" placeholder="e.g. Jane" autocomplete="given-name" />
+            <span class="field-error" id="firstNameErr">⚠ This field should be letters and space only.</span>
+          </div>
+          <div class="form-group">
+            <label for="lastName">Last Name <span class="required">*</span></label>
+            <input type="text" id="lastName" placeholder="e.g. Smith" autocomplete="family-name" />
+            <span class="field-error" id="lastNameErr">⚠ This field should be letters and space only.</span>
+          </div>
+        </div>
+
+        <div class="form-row form-row--1">
+          <div class="form-group">
+            <label>Date of Birth <span class="required">*</span></label>
+            <div class="dob-composite">
+              <div class="select-wrapper">
+                <select id="dobDay" aria-label="Day"></select>
+              </div>
+              <div class="select-wrapper">
+                <select id="dobMonth" aria-label="Month">
+                  <option value="">Month</option>
+                  <option value="1">Jan</option><option value="2">Feb</option>
+                  <option value="3">Mar</option><option value="4">Apr</option>
+                  <option value="5">May</option><option value="6">Jun</option>
+                  <option value="7">Jul</option><option value="8">Aug</option>
+                  <option value="9">Sep</option><option value="10">Oct</option>
+                  <option value="11">Nov</option><option value="12">Dec</option>
+                </select>
+              </div>
+              <div class="select-wrapper">
+                <select id="dobYear" aria-label="Year"></select>
+              </div>
+            </div>
+            <span class="field-error" id="dobErr">⚠ Please select a valid date of birth.</span>
+          </div>
+        </div>
+
+        <div class="form-row form-row--1">
+          <div class="form-group">
+            <label for="email">Email Address <span class="required">*</span></label>
+            <input type="email" id="email" placeholder="e.g. jane.smith@email.com" autocomplete="email" />
+            <span class="field-error" id="emailErr">⚠ Please enter a valid email address.</span>
+          </div>
+        </div>
+
+        <div class="form-row form-row--1">
+          <div class="form-group">
+            <label>Phone Number <span class="required">*</span></label>
+            <div class="phone-composite">
+              <div class="select-wrapper">
+                <select id="phoneCode" aria-label="Country code">
+                  <option value="+91">🇮🇳 +91 (India)</option>
+                  <option value="+1" selected>🇨🇦 +1 (Canada)</option>
+                  <option value="+1">🇺🇸 +1 (United States)</option>
+                </select>
+              </div>
+              <input type="tel" id="phoneNumber" placeholder="10-digit number" maxlength="10" />
+            </div>
+            <span class="field-error" id="phoneErr">⚠ Phone number must be 10 numeric digits.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Address -->
+      <div class="form-section">
+        <div class="form-section-title">Address</div>
+
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label for="aptUnit">Home / Apt / Unit Number</label>
+            <input type="text" id="aptUnit" placeholder="e.g. Apt 4B" autocomplete="address-line2" />
+          </div>
+          <div class="form-group">
+            <label for="streetNumber">Street Number <span class="required">*</span></label>
+            <input type="text" id="streetNumber" placeholder="e.g. 54" />
+            <span class="field-error" id="streetNumberErr">⚠ Please enter numeric values only.</span>
+          </div>
+        </div>
+
+        <div class="form-row form-row--1">
+          <div class="form-group">
+            <label for="streetName">Street Name <span class="required">*</span></label>
+            <input type="text" id="streetName" placeholder="e.g. Main Street" maxlength="60" autocomplete="address-line1" />
+            <span class="field-error" id="streetNameErr">⚠ Maximum 60 characters allowed.</span>
+          </div>
+        </div>
+
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label for="country">Country <span class="required">*</span></label>
+            <div class="select-wrapper">
+              <select id="country" autocomplete="country-name">
+                <option value="">— Select Country —</option>
+                <option value="Canada">Canada</option>
+                <option value="United States">United States</option>
+                <option value="India">India</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="province">Province / State <span class="required">*</span></label>
+            <div class="select-wrapper">
+              <select id="province" disabled autocomplete="address-level1">
+                <option value="">— Select Country first —</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row form-row--1">
+          <div class="form-group">
+            <label for="postalCode">Postal Code <span class="required">*</span></label>
+            <input type="text" id="postalCode" placeholder="Select a country first" disabled />
+            <span class="field-error" id="postalCodeErr">⚠ Invalid postal code.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Account Security -->
+      <div class="form-section">
+        <div class="form-section-title">Account Security</div>
+        <div class="form-row form-row--2">
+          <div class="form-group">
+            <label for="password">Password <span class="required">*</span></label>
+            <input type="password" id="password" placeholder="Min 8 characters" autocomplete="new-password" />
+            <span class="field-error" id="passwordErr">⚠ Password must be at least 8 characters.</span>
+          </div>
+          <div class="form-group">
+            <label for="confirmPassword">Confirm Password <span class="required">*</span></label>
+            <input type="password" id="confirmPassword" placeholder="Re-enter password" autocomplete="new-password" />
+            <span class="field-error" id="confirmPasswordErr">⚠ Passwords do not match.</span>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" class="btn--submit" id="registerSubmit">Create Account</button>
+
+    </div><!-- /form-fields-wrap -->
+
+    <div class="success-banner" id="successBanner" role="status">
+      ✅ Account created! Please verify your email to confirm your registration.
+    </div>
+
+    <div class="login-footer" style="margin-top:1.5rem;">
+      Already have an account? <a href="login.html">Sign in here</a>
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Daily Activity Monitor. All rights reserved.</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="session.js"></script>
+  <script src="main.js"></script>
+  <script src="register.js"></script>
+</body>
+</html>

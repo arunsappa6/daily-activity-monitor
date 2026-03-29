@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#FFFFFF" />
+  <title>Verify Your Email — Daily Activity Monitor</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <header class="navbar" id="navbar">
+    <div class="navbar-inner">
+      <div class="nav-brand"><a href="index.html">Daily Activity Monitor</a></div>
+      <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="nav-links" id="navLinks">
+        <a href="contact.html" class="nav-link">Contact Us</a>
+        <div class="nav-session">
+          <a href="login.html" class="nav-btn nav-btn--ghost">Login</a>
+          <a href="register.html" class="nav-btn nav-btn--solid">Register</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main class="page-main">
+    <div class="info-box">
+      <div class="info-box-icon">📧</div>
+      <h2>Check Your Email</h2>
+      <p>
+        We've sent a verification link to<br/>
+        <span class="info-email" id="pendingEmail">your email address</span>.
+      </p>
+      <p>
+        Click the link in that email to verify your account.<br/>
+        You only need to do this <strong>once</strong>. After verifying you can log in on any device.
+      </p>
+
+      <p style="margin-top:1.5rem; font-size:0.85rem; color:var(--color-ink-light);">
+        Didn't receive the email? Check your spam folder or
+        <a href="register.html">register again</a>.
+      </p>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Daily Activity Monitor. All rights reserved.</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="session.js"></script>
+  <script src="main.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var email = sessionStorage.getItem('dam_pending_email') || 'your email address';
+      document.getElementById('pendingEmail').textContent = email;
+    });
+  </script>
+</body>
+</html>
