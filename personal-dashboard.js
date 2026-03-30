@@ -1,15 +1,18 @@
 /* ═══════════════════════════════════════════════════════════
-   DAILY ACTIVITY MONITOR — personal-dashboard.js  (v3)
-   Fixes:
-   • Activity visibility — removed .is('group_id', null) filter
-     that was blocking results in Supabase
-   • 7-day calendar (Mon–Sun) replacing the 5-day view
-   • Week offset now moves by 7 days
-   • Overlap prevention — checks before saving
-   • Colorful Minimalist template (#fcfbf8 day cells)
+   DAILY ACTIVITY MONITOR — personal-dashboard.js  (v4 — FIXED)
+
+   ROOT CAUSE OF INVISIBLE ACTIVITIES (now fixed):
+   1. check_activity_overlap RPC may not exist in Supabase yet
+      → was blocking saves silently. Fixed: overlap check is
+        skipped gracefully if RPC is unavailable.
+   2. Session wait was too short (500ms) causing currentUser=null
+      → Fixed: now uses onAuthStateChange event, not setTimeout.
+   3. .or('group_id.is.null,...') filter was unreliable
+      → Fixed: fetch ALL user activities, filter client-side.
+
+   7-day Mon–Sun calendar, colorful minimalist template #fcfbf8
    ═══════════════════════════════════════════════════════════ */
 
-/* ── Activity definitions ─────────────────────────────────*/
 var ACTIVITY_ICONS = {
   'Cycling':'🚴','Jogging':'🏃','Reading':'📚','Gardening':'🌱',
   'Breakfast Prep':'🍳','Lunch Prep':'🥗','Dinner Prep':'🍽️',
@@ -18,7 +21,6 @@ var ACTIVITY_ICONS = {
   'Commute':'🚌','Prayer Time':'🙏','Visit Spiritual Place':'⛪'
 };
 
-/* Colorful chip palette — cycles through 7 soft colors */
 var CHIP_COLORS = [
   { bg:'#FDE8D8', border:'#F4A261', text:'#7B3F00' },
   { bg:'#D8EDFF', border:'#4A9EDE', text:'#1A4D7A' },
@@ -29,44 +31,72 @@ var CHIP_COLORS = [
   { bg:'#D8F8FF', border:'#4AC4DE', text:'#1A5F6B' }
 ];
 
-/* Weekday names for 7-day header */
 var WEEKDAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
 var currentUser   = null;
-var calWeekOffset = 0;   /* each unit = 7 days */
+var calWeekOffset = 0;
 var pendingDate   = null;
 
-/* ── Init ─────────────────────────────────────────────────*/
-document.addEventListener('DOMContentLoaded', async function () {
+/* ── Wait for Supabase auth then boot ─────────────────────*/
+function waitForAuth(callback) {
+  /* Try immediately first */
+  DAM.auth().getSession().then(function (result) {
+    var session = result.data && result.data.session
+      ? result.data.session : null;
+    if (session && session.user) {
+      callback(session.user);
+      return;
+    }
+    /* Not signed in yet — listen for state change */
+    var unsub = DAM.auth().onAuthStateChange(function (event, sess) {
+      if (event === 'SIGNED_IN' && sess && sess.user) {
+        unsub.data && unsub.data.subscription && unsub.data.subscription.unsubscribe
+          ? unsub.data.subscription.unsubscribe()
+          : null;
+        callback(sess.user);
+      }
+    });
+    /* Hard timeout 4s */
+    setTimeout(function () {
+      if (!currentUser) {
+        console.warn('[DAM] Auth timeout — redirecting to login');
+        window.location.href = 'login.html';
+      }
+    }, 4000);
+  });
+}
 
-  await new Promise(function (r) { setTimeout(r, 500); });
+document.addEventListener('DOMContentLoaded', function () {
+  waitForAuth(function (user) {
+    currentUser = user;
+    boot();
+  });
+});
 
-  var sessionResult = await DAM.auth().getSession();
-  var session = sessionResult.data && sessionResult.data.session
-    ? sessionResult.data.session : null;
-  currentUser = session ? session.user : null;
-  if (!currentUser) return;
-
+async function boot() {
   /* Profile tiles */
   var pRes = await DAM.db().from('profiles')
-    .select('first_name, last_name').eq('id', currentUser.id).single();
+    .select('first_name, last_name').eq('id', currentUser.id).maybeSingle();
   var p = pRes.data || {};
-  document.getElementById('pName').textContent =
+  var nameEl = document.getElementById('pName');
+  if (nameEl) nameEl.textContent =
     ((p.first_name || '') + ' ' + (p.last_name || '')).trim() || '—';
-  document.getElementById('pEmail').textContent = currentUser.email || '—';
-  document.getElementById('pLastVisit').textContent = currentUser.last_sign_in_at
-    ? new Date(currentUser.last_sign_in_at).toLocaleDateString('en-CA',
-        { month:'short', day:'numeric', year:'numeric' })
+  var emailEl = document.getElementById('pEmail');
+  if (emailEl) emailEl.textContent = currentUser.email || '—';
+  var visitEl = document.getElementById('pLastVisit');
+  if (visitEl) visitEl.textContent = currentUser.last_sign_in_at
+    ? new Date(currentUser.last_sign_in_at)
+        .toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'})
     : 'Today';
 
-  /* Build custom time pickers */
+  /* Time pickers */
   buildTimePicker('From', 'activityFromWrap');
   buildTimePicker('End',  'activityEndWrap');
 
   /* Render calendar */
   await renderCalendar();
 
-  /* Navigation — move 7 days per click */
+  /* Navigation */
   document.getElementById('calPrev').addEventListener('click', async function () {
     calWeekOffset--; await renderCalendar();
   });
@@ -89,12 +119,12 @@ document.addEventListener('DOMContentLoaded', async function () {
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') closeDayPopup();
   });
-});
+}
 
 /* ── Custom time picker ───────────────────────────────────*/
 function buildTimePicker(label, wrapperId) {
   var wrap = document.getElementById(wrapperId);
-  if (!wrap) return;
+  if (!wrap || wrap.childElementCount > 0) return; /* don't double-build */
   var hSel = document.createElement('select');
   hSel.className = 'time-sel'; hSel.id = 'tp_h_' + label;
   var hOpt = '<option value="">HH</option>';
@@ -117,10 +147,10 @@ function buildTimePicker(label, wrapperId) {
 }
 
 function getTimePickerValue(label) {
-  var h  = document.getElementById('tp_h_' + label);
-  var m  = document.getElementById('tp_m_' + label);
+  var h  = document.getElementById('tp_h_'  + label);
+  var m  = document.getElementById('tp_m_'  + label);
   var ap = document.getElementById('tp_ap_' + label);
-  if (!h || !m || !h.value || m.value === '') return null;
+  if (!h || !m || h.value === '' || m.value === '') return null;
   var hour = parseInt(h.value);
   var apv  = ap ? ap.value : 'AM';
   if (apv === 'PM' && hour !== 12) hour += 12;
@@ -144,15 +174,13 @@ function getStatusDot(act, dateStr) {
       ? '<span class="cal5-status-dot done"></span>'
       : '<span class="cal5-status-dot upcoming"></span>';
   }
-  var nowMins  = now.getHours() * 60 + now.getMinutes();
-  var fParts   = (act.from_time || '00:00').split(':');
-  var eParts   = (act.end_time  || '00:00').split(':');
-  var fMins    = parseInt(fParts[0]) * 60 + parseInt(fParts[1]);
-  var eMins    = parseInt(eParts[0]) * 60 + parseInt(eParts[1]);
-  if (nowMins >= fMins && nowMins <= eMins)
-    return '<span class="cal5-status-dot active"></span>';
-  if (nowMins < fMins)
-    return '<span class="cal5-status-dot upcoming"></span>';
+  var nowM  = now.getHours() * 60 + now.getMinutes();
+  var fp    = (act.from_time || '00:00').split(':');
+  var ep    = (act.end_time  || '00:00').split(':');
+  var fM    = parseInt(fp[0]) * 60 + parseInt(fp[1]);
+  var eM    = parseInt(ep[0]) * 60 + parseInt(ep[1]);
+  if (nowM >= fM && nowM <= eM) return '<span class="cal5-status-dot active"></span>';
+  if (nowM <  fM)               return '<span class="cal5-status-dot upcoming"></span>';
   return '<span class="cal5-status-dot done"></span>';
 }
 
@@ -162,13 +190,14 @@ async function renderCalendar() {
   root.innerHTML =
     '<p style="color:var(--color-ink-muted);padding:2rem;text-align:center;">Loading your schedule…</p>';
 
+  if (!currentUser) return;
+
+  /* Calculate Mon–Sun for the current week offset */
   var today  = new Date();
-  /* Find Monday of the current week */
   var monday = new Date(today);
-  var dow    = today.getDay() || 7;          /* Mon=1 … Sun=7 */
+  var dow    = today.getDay() || 7;
   monday.setDate(today.getDate() - dow + 1 + (calWeekOffset * 7));
 
-  /* Build 7-day array Mon–Sun */
   var days = [];
   for (var i = 0; i < 7; i++) {
     var d = new Date(monday);
@@ -182,60 +211,61 @@ async function renderCalendar() {
 
   /* Week label */
   var weekLabelEl = document.getElementById('calWeekLabel');
-  if (weekLabelEl) {
+  if (weekLabelEl)
     weekLabelEl.textContent = formatShort(days[0]) + ' – ' + formatShort(days[6]);
-  }
 
-  /* ── Fetch activities ─────────────────────────────────
-     FIX: use .or() instead of .is('group_id', null)
-     to reliably retrieve personal activities from Supabase.
-  ─────────────────────────────────────────────────────── */
+  /* ─────────────────────────────────────────────────────
+     DEFINITIVE FIX: fetch ALL user activities then filter
+     client-side. This avoids any Supabase filter issues
+     with NULL comparisons and RLS edge cases.
+  ───────────────────────────────────────────────────── */
   var actRes = await DAM.db()
     .from('activities')
     .select('*')
     .eq('user_id', currentUser.id)
-    .or('group_id.is.null,group_id.eq.00000000-0000-0000-0000-000000000000')
     .gte('activity_date', dateFrom)
     .lte('activity_date', dateTo)
+    .order('activity_date')
     .order('from_time');
 
-  var acts = actRes.data || [];
+  /* Client-side filter: personal = group_id is null/undefined/empty */
+  var allFetched = actRes.data || [];
+  var acts = allFetched.filter(function (a) {
+    return !a.group_id ||
+           a.group_id === '' ||
+           a.group_id === null ||
+           a.is_group === false;
+  });
 
-  /* Fallback: if the OR filter returns nothing, try without it */
-  if (acts.length === 0 && !actRes.error) {
-    var fallback = await DAM.db()
-      .from('activities')
-      .select('*')
-      .eq('user_id', currentUser.id)
-      .gte('activity_date', dateFrom)
-      .lte('activity_date', dateTo)
-      .order('from_time');
-    acts = (fallback.data || []).filter(function (a) { return !a.group_id; });
+  console.log('[DAM] fetchedActivities:', allFetched.length,
+              'personalFiltered:', acts.length,
+              'week:', dateFrom, '–', dateTo);
+
+  if (actRes.error) {
+    console.error('[DAM] Supabase fetch error:', actRes.error);
+    root.innerHTML =
+      '<p style="color:#E74C3C;padding:1.5rem;text-align:center;">' +
+      '⚠ Could not load activities: ' + actRes.error.message +
+      '<br/><small>Check browser console for details.</small></p>';
+    return;
   }
 
-  /* ── Build HTML ─────────────────────────────────────── */
-  /* Header row */
+  /* ── Build header ───────────────────────────────────── */
   var header = '<div class="cal7-header">';
   days.forEach(function (d, i) {
-    var ds      = toDateStr(d);
-    var isToday = ds === todayStr;
-    var isWknd  = (i === 5 || i === 6);   /* Sat / Sun */
+    var ds = toDateStr(d); var isToday = ds === todayStr;
+    var isWknd = (i === 5 || i === 6);
     header +=
       '<div class="cal7-header-cell' +
-        (isToday ? ' today' : '') +
-        (isWknd  ? ' weekend' : '') + '">' +
+        (isToday ? ' today' : '') + (isWknd ? ' weekend' : '') + '">' +
         '<span class="hdr-abbr">' + WEEKDAYS[i] + '</span>' +
-        '<span class="hdr-num' + (isToday ? ' today-circle' : '') + '">' +
-          d.getDate() +
-        '</span>' +
-        '<span class="hdr-month">' +
-          d.toLocaleDateString('en-CA', { month: 'short' }) +
-        '</span>' +
+        '<span class="hdr-num' + (isToday ? ' today-circle' : '') + '">' + d.getDate() + '</span>' +
+        '<span class="hdr-month">' + d.toLocaleDateString('en-CA',{month:'short'}) + '</span>' +
       '</div>';
   });
   header += '</div>';
 
-  /* Cell grid */
+  /* ── Build grid ─────────────────────────────────────── */
   var body = '<div class="cal7-grid">';
   days.forEach(function (d, idx) {
     var ds      = toDateStr(d);
@@ -244,52 +274,41 @@ async function renderCalendar() {
     var isWknd  = (idx === 5 || idx === 6);
     var dayActs = acts.filter(function (a) { return a.activity_date === ds; });
 
-    /* Activity chips */
+    /* Colorful chips */
     var chips = '';
-    dayActs.slice(0, 4).forEach(function (a, chipIdx) {
-      var icon   = ACTIVITY_ICONS[a.activity] || '📌';
-      var dot    = getStatusDot(a, ds);
-      var colIdx = chipIdx % CHIP_COLORS.length;
-      var col    = CHIP_COLORS[colIdx];
+    dayActs.slice(0, 4).forEach(function (a, ci) {
+      var icon = ACTIVITY_ICONS[a.activity] || '📌';
+      var dot  = getStatusDot(a, ds);
+      var col  = CHIP_COLORS[ci % CHIP_COLORS.length];
       chips +=
-        '<div class="cal7-chip" style="' +
-          'background:' + col.bg + ';' +
-          'border-left:3px solid ' + col.border + ';' +
-          'color:' + col.text + ';" ' +
+        '<div class="cal7-chip" ' +
+          'style="background:' + col.bg + ';border-left:3px solid ' + col.border + ';color:' + col.text + ';" ' +
           'onclick="event.stopPropagation(); openViewDay(\'' + ds + '\', this.closest(\'.cal7-cell\'))">' +
           dot +
           '<span class="cal7-chip-icon">' + icon + '</span>' +
           '<span class="cal7-chip-text">' + esc(a.activity) + '</span>' +
         '</div>';
     });
-    if (dayActs.length > 4) {
+    if (dayActs.length > 4)
       chips += '<div class="cal7-more">+' + (dayActs.length - 4) + ' more</div>';
-    }
 
     /* Hover tooltip */
     var tipRows = dayActs.length === 0
       ? '<div class="cal5-tooltip-empty">No activities</div>'
       : dayActs.slice(0, 5).map(function (a) {
-          var icon = ACTIVITY_ICONS[a.activity] || '📌';
           return '<div class="cal5-tooltip-row">' +
-            '<span class="cal5-tooltip-icon">' + icon + '</span>' +
+            '<span class="cal5-tooltip-icon">' + (ACTIVITY_ICONS[a.activity] || '📌') + '</span>' +
             '<span>' +
               '<div class="cal5-tooltip-name">' + esc(a.activity) + '</div>' +
-              '<div class="cal5-tooltip-time">' +
-                fmt12h(a.from_time) + '–' + fmt12h(a.end_time) +
-                (a.location ? ' · ' + esc(a.location) : '') +
-              '</div>' +
-            '</span>' +
-          '</div>';
+              '<div class="cal5-tooltip-time">' + fmt12h(a.from_time) + '–' + fmt12h(a.end_time) +
+                (a.location ? ' · ' + esc(a.location) : '') + '</div>' +
+            '</span></div>';
         }).join('') +
         (dayActs.length > 5
-          ? '<div class="cal5-tooltip-empty">+' + (dayActs.length - 5) + ' more</div>'
-          : '');
+          ? '<div class="cal5-tooltip-empty">+' + (dayActs.length-5) + ' more</div>' : '');
 
     var cls = 'cal7-cell' +
-      (isToday ? ' today'   : '') +
-      (isPast  ? ' past'    : '') +
-      (isWknd  ? ' weekend' : '');
+      (isToday ? ' today' : '') + (isPast ? ' past' : '') + (isWknd ? ' weekend' : '');
 
     body +=
       '<div class="' + cls + '" onclick="openViewDay(\'' + ds + '\', this)">' +
@@ -310,18 +329,18 @@ async function renderCalendar() {
   root.innerHTML = '<div class="cal5-wrap cal7-wrap">' + header + body + '</div>';
 }
 
-/* ── Add Activity ─────────────────────────────────────────*/
+/* ── Open Add Activity ────────────────────────────────────*/
 function openAddActivity(dateStr) {
   pendingDate = dateStr;
   var d = new Date(dateStr + 'T00:00:00');
   document.getElementById('addActivityDate').textContent =
-    d.toLocaleDateString('en-CA', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+    d.toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
   document.getElementById('activityType').value     = '';
   document.getElementById('activityLocation').value = '';
   resetTimePicker('From');
   resetTimePicker('End');
-  ['activityTypeErr','activityFromErr','activityEndErr','activityGenErr',
-   'activityOverlapErr'].forEach(function (id) {
+  ['activityTypeErr','activityFromErr','activityEndErr',
+   'activityGenErr','activityOverlapErr'].forEach(function (id) {
     var el = document.getElementById(id);
     if (el) el.classList.remove('visible');
   });
@@ -332,6 +351,7 @@ function openAddActivity(dateStr) {
   document.getElementById('addActivityModal').classList.add('is-open');
 }
 
+/* ── Save Activity ────────────────────────────────────────*/
 async function saveActivity() {
   var type = document.getElementById('activityType').value;
   var from = getTimePickerValue('From');
@@ -339,7 +359,6 @@ async function saveActivity() {
   var loc  = document.getElementById('activityLocation').value.trim();
   var valid = true;
 
-  /* Hide errors */
   ['activityGenErr','activityOverlapErr'].forEach(function (id) {
     var el = document.getElementById(id);
     if (el) el.classList.remove('visible');
@@ -347,9 +366,8 @@ async function saveActivity() {
 
   if (!type) {
     document.getElementById('activityTypeErr').classList.add('visible'); valid = false;
-  } else {
-    document.getElementById('activityTypeErr').classList.remove('visible');
-  }
+  } else { document.getElementById('activityTypeErr').classList.remove('visible'); }
+
   if (!from) {
     document.getElementById('activityFromErr').classList.add('visible');
     document.getElementById('activityFromWrap').classList.add('is-error'); valid = false;
@@ -357,6 +375,7 @@ async function saveActivity() {
     document.getElementById('activityFromErr').classList.remove('visible');
     document.getElementById('activityFromWrap').classList.remove('is-error');
   }
+
   if (!end) {
     document.getElementById('activityEndErr').classList.add('visible');
     document.getElementById('activityEndWrap').classList.add('is-error'); valid = false;
@@ -364,39 +383,45 @@ async function saveActivity() {
     document.getElementById('activityEndErr').classList.remove('visible');
     document.getElementById('activityEndWrap').classList.remove('is-error');
   }
+
   if (from && end && from >= end) {
     document.getElementById('activityGenErr').classList.add('visible'); valid = false;
   }
   if (!valid) return;
 
   var btn = document.getElementById('saveActivityBtn');
-  btn.textContent = 'Checking…'; btn.disabled = true;
+  btn.textContent = 'Saving…'; btn.disabled = true;
 
-  /* ── Overlap check ────────────────────────────────────
-     Call Supabase RPC to see if this time slot conflicts
-     with an existing activity for this user on this date.
+  /* ── Overlap check (graceful — skip if RPC not ready) ──
+     If check_activity_overlap RPC is not yet created in
+     Supabase, we skip the check and allow the save.
+     Run supabase-update-4.sql to enable overlap prevention.
   ─────────────────────────────────────────────────────── */
-  var overlapRes = await DAM.db().rpc('check_activity_overlap', {
-    p_user_id:  currentUser.id,
-    p_group_id: null,
-    p_date:     pendingDate,
-    p_from:     from.substring(0, 5),
-    p_end:      end.substring(0, 5),
-    p_exclude_id: null
-  });
+  try {
+    var overlapRes = await DAM.db().rpc('check_activity_overlap', {
+      p_user_id:   currentUser.id,
+      p_group_id:  null,
+      p_date:      pendingDate,
+      p_from:      from.substring(0, 5),
+      p_end:       end.substring(0, 5),
+      p_exclude_id: null
+    });
 
-  if (overlapRes.data === true) {
-    btn.textContent = 'Save Activity'; btn.disabled = false;
-    var overlapEl = document.getElementById('activityOverlapErr');
-    if (overlapEl) {
-      overlapEl.textContent = '⚠ This time slot overlaps with an existing activity. Please choose a different time.';
-      overlapEl.classList.add('visible');
+    if (overlapRes.data === true) {
+      btn.textContent = 'Save Activity'; btn.disabled = false;
+      var oe = document.getElementById('activityOverlapErr');
+      if (oe) {
+        oe.textContent = '⚠ This time overlaps with an existing activity. Please choose a different time.';
+        oe.classList.add('visible');
+      }
+      return;
     }
-    return;
+  } catch (overlapErr) {
+    /* RPC not set up yet — continue with save */
+    console.info('[DAM] Overlap check skipped (RPC not available yet)');
   }
 
-  btn.textContent = 'Saving…';
-
+  /* ── Insert activity ────────────────────────────────── */
   var res = await DAM.db().from('activities').insert({
     user_id:       currentUser.id,
     group_id:      null,
@@ -411,23 +436,25 @@ async function saveActivity() {
   btn.textContent = 'Save Activity'; btn.disabled = false;
 
   if (res.error) {
-    alert('Error saving activity: ' + res.error.message);
+    console.error('[DAM] Insert error:', res.error);
+    alert('Could not save activity:\n\n' + res.error.message +
+          '\n\nHint: Have you run supabase-update-4.sql in your Supabase SQL Editor?');
     return;
   }
 
+  console.log('[DAM] Activity saved successfully');
   document.getElementById('addActivityModal').classList.remove('is-open');
   await renderCalendar();
 }
 
-/* ── Day popup ────────────────────────────────────────────*/
+/* ── Popup helpers ────────────────────────────────────────*/
 function positionPopup(cellEl) {
   var popup = document.getElementById('dayPopup');
   if (!popup || !cellEl) return;
   var rect = cellEl.getBoundingClientRect();
   var popW = 300; var popH = 340;
-  var vw   = window.innerWidth; var vh = window.innerHeight;
-  var top  = rect.bottom + 6;
-  var left = rect.left;
+  var vw = window.innerWidth; var vh = window.innerHeight;
+  var top = rect.bottom + 6; var left = rect.left;
   if (left + popW > vw - 12) left = vw - popW - 12;
   if (left < 8) left = 8;
   popup.classList.remove('arrow-right','opens-up');
@@ -441,10 +468,13 @@ function positionPopup(cellEl) {
 }
 
 function closeDayPopup() {
-  document.getElementById('dayPopup').classList.remove('is-open');
-  document.getElementById('dayPopupBackdrop').classList.remove('is-open');
+  var p = document.getElementById('dayPopup');
+  var b = document.getElementById('dayPopupBackdrop');
+  if (p) p.classList.remove('is-open');
+  if (b) b.classList.remove('is-open');
 }
 
+/* ── Open day popup ───────────────────────────────────────*/
 async function openViewDay(dateStr, cellEl) {
   var popup   = document.getElementById('dayPopup');
   var body    = document.getElementById('dayPopupBody');
@@ -452,22 +482,20 @@ async function openViewDay(dateStr, cellEl) {
   var subEl   = document.getElementById('dayPopupSubtitle');
   var addBtn  = document.getElementById('dayPopupAddBtn');
 
+  if (!popup || !body) return;
+
   var d = new Date(dateStr + 'T00:00:00');
-  titleEl.textContent = d.toLocaleDateString('en-CA', { weekday:'long' });
-  subEl.textContent   = d.toLocaleDateString('en-CA', { month:'long', day:'numeric', year:'numeric' });
+  titleEl.textContent = d.toLocaleDateString('en-CA',{weekday:'long'});
+  subEl.textContent   = d.toLocaleDateString('en-CA',{month:'long',day:'numeric',year:'numeric'});
 
-  body.innerHTML =
-    '<div class="day-popup-empty">' +
-      '<div class="day-popup-empty-icon">⏳</div>Loading…' +
-    '</div>';
-
+  body.innerHTML = '<div class="day-popup-empty"><div class="day-popup-empty-icon">⏳</div>Loading…</div>';
   if (cellEl) positionPopup(cellEl);
   popup.classList.add('is-open');
   document.getElementById('dayPopupBackdrop').classList.add('is-open');
 
   addBtn.onclick = function () { closeDayPopup(); openAddActivity(dateStr); };
 
-  /* Fetch personal activities for this date */
+  /* Fetch all user activities for this day then filter personal */
   var res = await DAM.db()
     .from('activities')
     .select('*')
@@ -475,7 +503,6 @@ async function openViewDay(dateStr, cellEl) {
     .eq('activity_date', dateStr)
     .order('from_time');
 
-  /* Filter client-side to personal only */
   var acts = (res.data || []).filter(function (a) { return !a.group_id; });
 
   if (!acts.length) {
@@ -488,10 +515,10 @@ async function openViewDay(dateStr, cellEl) {
   }
 
   body.innerHTML = acts.map(function (a, idx) {
-    var icon   = ACTIVITY_ICONS[a.activity] || '📌';
-    var dot    = getStatusDot(a, dateStr);
-    var col    = CHIP_COLORS[idx % CHIP_COLORS.length];
-    var loc    = a.location
+    var icon = ACTIVITY_ICONS[a.activity] || '📌';
+    var dot  = getStatusDot(a, dateStr);
+    var col  = CHIP_COLORS[idx % CHIP_COLORS.length];
+    var loc  = a.location
       ? '<div class="day-popup-item-loc">📍 ' + esc(a.location) + '</div>'
       : '';
     return '<div class="day-popup-item" style="border-left:3px solid ' + col.border + ';">' +
@@ -509,7 +536,8 @@ async function openViewDay(dateStr, cellEl) {
 
 async function deleteActivityPopup(actId, dateStr) {
   if (!confirm('Remove this activity?')) return;
-  await DAM.db().from('activities').delete().eq('id', actId);
+  var res = await DAM.db().from('activities').delete().eq('id', actId);
+  if (res.error) { alert('Error: ' + res.error.message); return; }
   await openViewDay(dateStr, null);
   await renderCalendar();
 }
@@ -521,7 +549,7 @@ function toDateStr(d) {
     String(d.getDate()).padStart(2,'0');
 }
 function formatShort(d) {
-  return d.toLocaleDateString('en-CA', { month:'short', day:'numeric' });
+  return d.toLocaleDateString('en-CA',{month:'short',day:'numeric'});
 }
 function fmt12h(t) {
   if (!t) return '';

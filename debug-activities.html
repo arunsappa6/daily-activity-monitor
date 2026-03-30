@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Activity Debugger — Daily Activity Monitor</title>
+  <style>
+    body { font-family: monospace; padding: 1.5rem; background: #f5f5f5; }
+    h1   { font-size: 1.2rem; margin-bottom: 1rem; }
+    .card { background:#fff; border:1px solid #ddd; border-radius:8px;
+            padding:1rem; margin-bottom:1rem; }
+    .label  { font-size:0.78rem; color:#666; text-transform:uppercase;
+              letter-spacing:0.05em; margin-bottom:0.25rem; }
+    .value  { font-size:0.92rem; color:#111; margin-bottom:0.75rem;
+              word-break:break-all; }
+    .ok     { color: #1E8449; font-weight:700; }
+    .warn   { color: #E74C3C; font-weight:700; }
+    .info   { color: #1A4D7A; }
+    table   { width:100%; border-collapse:collapse; font-size:0.82rem; }
+    th,td   { text-align:left; padding:0.4rem 0.6rem;
+              border-bottom:1px solid #eee; }
+    th      { background:#f8f8f8; font-weight:700; color:#555; }
+    .btn    { padding:0.5rem 1.2rem; background:#1B4F72; color:#fff;
+              border:none; border-radius:6px; cursor:pointer;
+              font-size:0.9rem; margin-right:0.5rem; margin-bottom:0.5rem; }
+    .btn:hover { background:#2E86C1; }
+    .btn-red { background:#E74C3C; }
+    .btn-red:hover { background:#C0392B; }
+    pre     { background:#1a1a2e; color:#00FF88; padding:1rem;
+              border-radius:6px; overflow-x:auto; font-size:0.78rem;
+              max-height:300px; overflow-y:auto; }
+    #log    { white-space:pre-wrap; }
+  </style>
+</head>
+<body>
+
+<h1>🔍 Daily Activity Monitor — Activity Debugger</h1>
+<p style="font-size:0.85rem;color:#666;margin-bottom:1rem;">
+  This page checks your Supabase connection, session, and activities table.
+  Open your browser console (F12) for additional detail.
+</p>
+
+<div class="card">
+  <div class="label">Actions</div>
+  <button class="btn" onclick="runDiagnostic()">▶ Run Full Diagnostic</button>
+  <button class="btn" onclick="testInsert()">🧪 Test Insert Activity</button>
+  <button class="btn" onclick="fetchAllActivities()">📋 Fetch All My Activities</button>
+  <button class="btn btn-red" onclick="clearLog()">✕ Clear Log</button>
+</div>
+
+<div class="card">
+  <div class="label">Diagnostic Log</div>
+  <pre id="log">Press "Run Full Diagnostic" to start…</pre>
+</div>
+
+<div class="card" id="resultsCard" style="display:none;">
+  <div class="label">Activities in Supabase</div>
+  <div id="resultsBody"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-config.js"></script>
+<script>
+
+var logEl = document.getElementById('log');
+function log(msg, style) {
+  var prefix = style === 'ok'   ? '✅ '
+             : style === 'warn' ? '❌ '
+             : style === 'info' ? 'ℹ️  '
+             : '   ';
+  logEl.textContent += prefix + msg + '\n';
+  logEl.scrollTop = logEl.scrollHeight;
+  console.log(prefix + msg);
+}
+function clearLog() { logEl.textContent = ''; }
+
+async function runDiagnostic() {
+  clearLog();
+  log('=== DIAGNOSTIC START ===');
+
+  /* 1. Check Supabase URL and key */
+  log('Supabase URL: ' + SUPABASE_URL, 'info');
+  var keyPreview = SUPABASE_ANON_KEY
+    ? SUPABASE_ANON_KEY.substring(0,20) + '…' : '(empty)';
+  log('Anon Key prefix: ' + keyPreview, 'info');
+
+  if (!SUPABASE_URL || SUPABASE_URL.includes('YOUR_PROJECT')) {
+    log('supabase-config.js is not configured! Add your real URL and key.', 'warn');
+    return;
+  }
+
+  /* 2. Check auth session */
+  log('\n=== SESSION CHECK ===');
+  var sessionResult = await _supabaseClient.auth.getSession();
+  var session = sessionResult.data && sessionResult.data.session
+    ? sessionResult.data.session : null;
+
+  if (!session) {
+    log('No active session — you are not logged in.', 'warn');
+    log('Go to login.html and sign in first, then return here.', 'info');
+    return;
+  }
+  var user = session.user;
+  log('Logged in as: ' + user.email, 'ok');
+  log('User ID: ' + user.id, 'info');
+
+  /* 3. Check profiles table */
+  log('\n=== PROFILES TABLE ===');
+  var pRes = await _supabaseClient.from('profiles')
+    .select('id, first_name, last_name, profile_status')
+    .eq('id', user.id).maybeSingle();
+  if (pRes.error) {
+    log('Error reading profiles: ' + pRes.error.message, 'warn');
+  } else if (!pRes.data) {
+    log('No profile row found for this user! The trigger may have failed.', 'warn');
+    log('Hint: Re-run supabase-setup.sql and supabase-update-3.sql', 'info');
+  } else {
+    log('Profile: ' + pRes.data.first_name + ' ' + pRes.data.last_name +
+        ' — status: ' + pRes.data.profile_status, 'ok');
+  }
+
+  /* 4. Check activities table (no filters at all) */
+  log('\n=== ACTIVITIES TABLE (no filters) ===');
+  var actAll = await _supabaseClient.from('activities')
+    .select('*').eq('user_id', user.id).limit(20);
+  if (actAll.error) {
+    log('Error reading activities: ' + actAll.error.message, 'warn');
+    log('Hint: Have you run supabase-update-2.sql?', 'info');
+  } else {
+    log('Total activities for your user: ' + (actAll.data || []).length, 'ok');
+    (actAll.data || []).forEach(function (a) {
+      log('  → [' + a.activity_date + '] ' + a.activity +
+          ' ' + a.from_time + '–' + a.end_time +
+          ' | group_id: ' + (a.group_id || 'null') +
+          ' | is_group: ' + a.is_group, 'info');
+    });
+  }
+
+  /* 5. Check personal-only activities */
+  log('\n=== PERSONAL ACTIVITIES (group_id filter) ===');
+  var actPersonal = await _supabaseClient.from('activities')
+    .select('*').eq('user_id', user.id).is('group_id', null);
+  if (actPersonal.error) {
+    log('Error with .is(group_id, null) filter: ' + actPersonal.error.message, 'warn');
+  } else {
+    log('.is(group_id, null) returned: ' + (actPersonal.data || []).length + ' rows', 'ok');
+  }
+
+  /* 6. Check today's date range */
+  log('\n=== DATE RANGE CHECK ===');
+  var today = new Date();
+  var dow = today.getDay() || 7;
+  var monday = new Date(today);
+  monday.setDate(today.getDate() - dow + 1);
+  var sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  var dateFrom = monday.toISOString().split('T')[0];
+  var dateTo   = sunday.toISOString().split('T')[0];
+  log('Current week: ' + dateFrom + ' to ' + dateTo, 'info');
+
+  var actWeek = await _supabaseClient.from('activities')
+    .select('*').eq('user_id', user.id)
+    .gte('activity_date', dateFrom).lte('activity_date', dateTo);
+  if (actWeek.error) {
+    log('Date range query error: ' + actWeek.error.message, 'warn');
+  } else {
+    log('Activities in this week: ' + (actWeek.data || []).length, 'ok');
+    if ((actWeek.data || []).length === 0) {
+      log('No activities found for this week — try scheduling one first!', 'info');
+    }
+  }
+
+  /* 7. Check RLS */
+  log('\n=== RLS CHECK ===');
+  var rlsCheck = await _supabaseClient.from('activities')
+    .select('count', {count:'exact', head:true}).eq('user_id', user.id);
+  if (rlsCheck.error) {
+    log('RLS may be blocking reads: ' + rlsCheck.error.message, 'warn');
+    log('Re-run supabase-update-4.sql to fix RLS policies', 'info');
+  } else {
+    log('RLS allows reading — total row count: ' + rlsCheck.count, 'ok');
+  }
+
+  log('\n=== DIAGNOSTIC COMPLETE ===');
+}
+
+async function fetchAllActivities() {
+  clearLog();
+  log('Fetching all your activities from Supabase…');
+
+  var sessionResult = await _supabaseClient.auth.getSession();
+  var session = sessionResult.data && sessionResult.data.session
+    ? sessionResult.data.session : null;
+  if (!session) { log('Not logged in — go to login.html first', 'warn'); return; }
+
+  var res = await _supabaseClient.from('activities')
+    .select('*').eq('user_id', session.user.id).order('activity_date').order('from_time');
+
+  if (res.error) { log('Error: ' + res.error.message, 'warn'); return; }
+
+  var acts = res.data || [];
+  log('Found ' + acts.length + ' activities total', 'ok');
+
+  var card = document.getElementById('resultsCard');
+  var body = document.getElementById('resultsBody');
+  card.style.display = 'block';
+
+  if (acts.length === 0) {
+    body.innerHTML = '<p style="color:#666;font-size:0.9rem;">No activities found. Try adding one from My Dashboard first.</p>';
+    return;
+  }
+
+  var html = '<table><thead><tr>' +
+    '<th>Date</th><th>Activity</th><th>From</th><th>To</th>' +
+    '<th>Location</th><th>group_id</th><th>is_group</th>' +
+    '</tr></thead><tbody>';
+  acts.forEach(function (a) {
+    html += '<tr>' +
+      '<td>' + a.activity_date + '</td>' +
+      '<td>' + a.activity + '</td>' +
+      '<td>' + (a.from_time || '') + '</td>' +
+      '<td>' + (a.end_time  || '') + '</td>' +
+      '<td>' + (a.location  || '—') + '</td>' +
+      '<td style="color:' + (a.group_id ? '#E74C3C':'#1E8449') + '">' +
+        (a.group_id || 'null') + '</td>' +
+      '<td>' + a.is_group + '</td>' +
+      '</tr>';
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+async function testInsert() {
+  clearLog();
+  log('Testing activity insert…');
+
+  var sessionResult = await _supabaseClient.auth.getSession();
+  var session = sessionResult.data && sessionResult.data.session
+    ? sessionResult.data.session : null;
+  if (!session) { log('Not logged in — go to login.html first', 'warn'); return; }
+
+  var today = new Date().toISOString().split('T')[0];
+  var testPayload = {
+    user_id:       session.user.id,
+    group_id:      null,
+    activity:      'Reading',
+    activity_date: today,
+    from_time:     '09:00:00',
+    end_time:      '09:30:00',
+    location:      'Test Location',
+    is_group:      false
+  };
+  log('Inserting test activity: ' + JSON.stringify(testPayload), 'info');
+
+  var res = await _supabaseClient.from('activities').insert(testPayload);
+  if (res.error) {
+    log('INSERT FAILED: ' + res.error.message, 'warn');
+    log('Error code: ' + res.error.code, 'info');
+    log('Hint: Run supabase-update-2.sql and supabase-update-4.sql in Supabase SQL Editor', 'info');
+  } else {
+    log('INSERT SUCCESS — the activity was saved!', 'ok');
+    log('Now go to My Dashboard and it should appear in today\'s cell.', 'info');
+    log('If it still doesn\'t appear, click "Fetch All My Activities" to verify.', 'info');
+  }
+}
+</script>
+</body>
+</html>
