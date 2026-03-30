@@ -228,18 +228,14 @@ async function renderCalendar() {
     .order('activity_date')
     .order('from_time');
 
-  /* Client-side filter: personal = group_id is null/undefined/empty */
-  var allFetched = actRes.data || [];
-  var acts = allFetched.filter(function (a) {
-    return !a.group_id ||
-           a.group_id === '' ||
-           a.group_id === null ||
-           a.is_group === false;
-  });
+  /* Show ALL activities belonging to this user.
+     No client-side filter — the user's own activities
+     are all relevant on the personal dashboard. */
+  var acts = actRes.data || [];
 
-  console.log('[DAM] fetchedActivities:', allFetched.length,
-              'personalFiltered:', acts.length,
-              'week:', dateFrom, '–', dateTo);
+  console.log('[DAM] Fetched', acts.length, 'activities for',
+              dateFrom, '–', dateTo,
+              '| error:', actRes.error ? actRes.error.message : 'none');
 
   if (actRes.error) {
     console.error('[DAM] Supabase fetch error:', actRes.error);
@@ -495,7 +491,8 @@ async function openViewDay(dateStr, cellEl) {
 
   addBtn.onclick = function () { closeDayPopup(); openAddActivity(dateStr); };
 
-  /* Fetch all user activities for this day then filter personal */
+  /* Fetch ALL user activities for this specific day.
+     No extra filter — show everything the user scheduled. */
   var res = await DAM.db()
     .from('activities')
     .select('*')
@@ -503,7 +500,7 @@ async function openViewDay(dateStr, cellEl) {
     .eq('activity_date', dateStr)
     .order('from_time');
 
-  var acts = (res.data || []).filter(function (a) { return !a.group_id; });
+  var acts = res.data || [];
 
   if (!acts.length) {
     body.innerHTML =
