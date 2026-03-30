@@ -1,53 +1,80 @@
 /* ═══════════════════════════════════════════════════════════
-   DAILY ACTIVITY MONITOR — personal-dashboard.js  (v2)
-   • New activities: Prayer Time, Visit Spiritual Place
-   • Custom time dropdowns (H/M/AM-PM)
-   • Hover tooltip showing scheduled activities
-   • Status dots: green (active now), red (upcoming), grey (done)
+   DAILY ACTIVITY MONITOR — personal-dashboard.js  (v3)
+   Fixes:
+   • Activity visibility — removed .is('group_id', null) filter
+     that was blocking results in Supabase
+   • 7-day calendar (Mon–Sun) replacing the 5-day view
+   • Week offset now moves by 7 days
+   • Overlap prevention — checks before saving
+   • Colorful Minimalist template (#fcfbf8 day cells)
    ═══════════════════════════════════════════════════════════ */
 
+/* ── Activity definitions ─────────────────────────────────*/
 var ACTIVITY_ICONS = {
   'Cycling':'🚴','Jogging':'🏃','Reading':'📚','Gardening':'🌱',
   'Breakfast Prep':'🍳','Lunch Prep':'🥗','Dinner Prep':'🍽️',
   'Hydration':'💧','Personal Care':'🧴','Work':'💼',
-  'Drop kids':'🚗','Pick-up kids':'🏫','Learning':'📖','Commute':'🚌',
-  'Prayer Time':'🙏','Visit Spiritual Place':'⛪'
+  'Drop kids':'🚗','Pick-up kids':'🏫','Learning':'📖',
+  'Commute':'🚌','Prayer Time':'🙏','Visit Spiritual Place':'⛪'
 };
 
+/* Colorful chip palette — cycles through 7 soft colors */
+var CHIP_COLORS = [
+  { bg:'#FDE8D8', border:'#F4A261', text:'#7B3F00' },
+  { bg:'#D8EDFF', border:'#4A9EDE', text:'#1A4D7A' },
+  { bg:'#D8F5E8', border:'#43BF87', text:'#1A5E3C' },
+  { bg:'#F5D8FF', border:'#B06EC9', text:'#5C1A7A' },
+  { bg:'#FFF4D8', border:'#F0C050', text:'#6B4A00' },
+  { bg:'#FFD8D8', border:'#E87070', text:'#7A1A1A' },
+  { bg:'#D8F8FF', border:'#4AC4DE', text:'#1A5F6B' }
+];
+
+/* Weekday names for 7-day header */
+var WEEKDAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
 var currentUser   = null;
-var calWeekOffset = 0;
+var calWeekOffset = 0;   /* each unit = 7 days */
 var pendingDate   = null;
 
 /* ── Init ─────────────────────────────────────────────────*/
 document.addEventListener('DOMContentLoaded', async function () {
 
   await new Promise(function (r) { setTimeout(r, 500); });
+
   var sessionResult = await DAM.auth().getSession();
-  var session = sessionResult.data && sessionResult.data.session ? sessionResult.data.session : null;
+  var session = sessionResult.data && sessionResult.data.session
+    ? sessionResult.data.session : null;
   currentUser = session ? session.user : null;
   if (!currentUser) return;
 
-  /* Profile summary tiles */
+  /* Profile tiles */
   var pRes = await DAM.db().from('profiles')
     .select('first_name, last_name').eq('id', currentUser.id).single();
   var p = pRes.data || {};
-  document.getElementById('pName').textContent = ((p.first_name||'') + ' ' + (p.last_name||'')).trim() || '—';
+  document.getElementById('pName').textContent =
+    ((p.first_name || '') + ' ' + (p.last_name || '')).trim() || '—';
   document.getElementById('pEmail').textContent = currentUser.email || '—';
   document.getElementById('pLastVisit').textContent = currentUser.last_sign_in_at
-    ? new Date(currentUser.last_sign_in_at).toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'})
+    ? new Date(currentUser.last_sign_in_at).toLocaleDateString('en-CA',
+        { month:'short', day:'numeric', year:'numeric' })
     : 'Today';
-
-  await renderCalendar();
-
-  /* Navigation */
-  document.getElementById('calPrev').addEventListener('click', async function () { calWeekOffset--; await renderCalendar(); });
-  document.getElementById('calNext').addEventListener('click', async function () { calWeekOffset++; await renderCalendar(); });
 
   /* Build custom time pickers */
   buildTimePicker('From', 'activityFromWrap');
   buildTimePicker('End',  'activityEndWrap');
 
-  /* Modal close handlers */
+  /* Render calendar */
+  await renderCalendar();
+
+  /* Navigation — move 7 days per click */
+  document.getElementById('calPrev').addEventListener('click', async function () {
+    calWeekOffset--; await renderCalendar();
+  });
+  document.getElementById('calNext').addEventListener('click', async function () {
+    calWeekOffset++; await renderCalendar();
+  });
+
+  /* Add activity modal */
   document.getElementById('cancelActivityBtn').addEventListener('click', function () {
     document.getElementById('addActivityModal').classList.remove('is-open');
   });
@@ -56,7 +83,7 @@ document.addEventListener('DOMContentLoaded', async function () {
   });
   document.getElementById('saveActivityBtn').addEventListener('click', saveActivity);
 
-  /* Day popup close handlers */
+  /* Day popup close */
   document.getElementById('dayPopupClose').addEventListener('click', closeDayPopup);
   document.getElementById('dayPopupBackdrop').addEventListener('click', closeDayPopup);
   document.addEventListener('keydown', function (e) {
@@ -64,53 +91,40 @@ document.addEventListener('DOMContentLoaded', async function () {
   });
 });
 
-/* ── Build custom time picker dropdowns ───────────────────*/
+/* ── Custom time picker ───────────────────────────────────*/
 function buildTimePicker(label, wrapperId) {
   var wrap = document.getElementById(wrapperId);
   if (!wrap) return;
-
-  /* Hours 1–12 */
   var hSel = document.createElement('select');
   hSel.className = 'time-sel'; hSel.id = 'tp_h_' + label;
-  hSel.setAttribute('aria-label', label + ' hour');
   var hOpt = '<option value="">HH</option>';
-  for (var h = 1; h <= 12; h++) hOpt += '<option value="' + h + '">' + String(h).padStart(2,'0') + '</option>';
+  for (var h = 1; h <= 12; h++)
+    hOpt += '<option value="' + h + '">' + String(h).padStart(2,'0') + '</option>';
   hSel.innerHTML = hOpt;
-
-  /* Separator */
   var sep = document.createElement('span');
   sep.className = 'time-sep'; sep.textContent = ':';
-
-  /* Minutes 00–59 */
   var mSel = document.createElement('select');
   mSel.className = 'time-sel'; mSel.id = 'tp_m_' + label;
-  mSel.setAttribute('aria-label', label + ' minute');
   var mOpt = '<option value="">MM</option>';
-  for (var m = 0; m <= 59; m++) mOpt += '<option value="' + m + '">' + String(m).padStart(2,'0') + '</option>';
+  for (var m = 0; m <= 59; m++)
+    mOpt += '<option value="' + m + '">' + String(m).padStart(2,'0') + '</option>';
   mSel.innerHTML = mOpt;
-
-  /* AM / PM */
   var ampm = document.createElement('select');
   ampm.className = 'time-ampm'; ampm.id = 'tp_ap_' + label;
-  ampm.setAttribute('aria-label', label + ' AM PM');
   ampm.innerHTML = '<option value="AM">AM</option><option value="PM">PM</option>';
-
-  wrap.appendChild(hSel);
-  wrap.appendChild(sep);
-  wrap.appendChild(mSel);
-  wrap.appendChild(ampm);
+  wrap.appendChild(hSel); wrap.appendChild(sep);
+  wrap.appendChild(mSel); wrap.appendChild(ampm);
 }
 
-/* ── Read time picker value as HH:MM (24h) ───────────────*/
 function getTimePickerValue(label) {
   var h  = document.getElementById('tp_h_' + label);
   var m  = document.getElementById('tp_m_' + label);
   var ap = document.getElementById('tp_ap_' + label);
-  if (!h || !m || !h.value || !m.value) return null;
+  if (!h || !m || !h.value || m.value === '') return null;
   var hour = parseInt(h.value);
-  var ap_v = ap ? ap.value : 'AM';
-  if (ap_v === 'PM' && hour !== 12) hour += 12;
-  if (ap_v === 'AM' && hour === 12) hour = 0;
+  var apv  = ap ? ap.value : 'AM';
+  if (apv === 'PM' && hour !== 12) hour += 12;
+  if (apv === 'AM' && hour === 12) hour = 0;
   return String(hour).padStart(2,'0') + ':' + String(m.value).padStart(2,'0') + ':00';
 }
 
@@ -121,149 +135,193 @@ function resetTimePicker(label) {
   });
 }
 
-/* ── Status dot for an activity ──────────────────────────*/
+/* ── Status dot ───────────────────────────────────────────*/
 function getStatusDot(act, dateStr) {
-  var now     = new Date();
-  var todayStr= toDateStr(now);
+  var now      = new Date();
+  var todayStr = toDateStr(now);
   if (dateStr !== todayStr) {
-    /* Past or future date */
-    var actDate = new Date(dateStr + 'T00:00:00');
-    if (actDate < now) return '<span class="cal5-status-dot done"></span>';
-    return '<span class="cal5-status-dot upcoming"></span>';
+    return new Date(dateStr + 'T00:00:00') < now
+      ? '<span class="cal5-status-dot done"></span>'
+      : '<span class="cal5-status-dot upcoming"></span>';
   }
-  /* Today — compare times */
-  var nowMins   = now.getHours() * 60 + now.getMinutes();
-  var fromParts = (act.from_time||'00:00').split(':');
-  var endParts  = (act.end_time ||'00:00').split(':');
-  var fromMins  = parseInt(fromParts[0]) * 60 + parseInt(fromParts[1]);
-  var endMins   = parseInt(endParts[0])  * 60 + parseInt(endParts[1]);
-  if (nowMins >= fromMins && nowMins <= endMins) {
+  var nowMins  = now.getHours() * 60 + now.getMinutes();
+  var fParts   = (act.from_time || '00:00').split(':');
+  var eParts   = (act.end_time  || '00:00').split(':');
+  var fMins    = parseInt(fParts[0]) * 60 + parseInt(fParts[1]);
+  var eMins    = parseInt(eParts[0]) * 60 + parseInt(eParts[1]);
+  if (nowMins >= fMins && nowMins <= eMins)
     return '<span class="cal5-status-dot active"></span>';
-  }
-  if (nowMins < fromMins) {
+  if (nowMins < fMins)
     return '<span class="cal5-status-dot upcoming"></span>';
-  }
   return '<span class="cal5-status-dot done"></span>';
 }
 
-/* ── 5-Day calendar renderer ─────────────────────────────*/
+/* ── 7-Day Calendar Renderer ─────────────────────────────*/
 async function renderCalendar() {
   var root = document.getElementById('calendarRoot');
-  root.innerHTML = '<p style="color:var(--color-ink-muted); padding:1.5rem; text-align:center;">Loading your schedule…</p>';
+  root.innerHTML =
+    '<p style="color:var(--color-ink-muted);padding:2rem;text-align:center;">Loading your schedule…</p>';
 
   var today  = new Date();
+  /* Find Monday of the current week */
   var monday = new Date(today);
-  var dow    = today.getDay() || 7;
-  monday.setDate(today.getDate() - dow + 1 + (calWeekOffset * 5));
+  var dow    = today.getDay() || 7;          /* Mon=1 … Sun=7 */
+  monday.setDate(today.getDate() - dow + 1 + (calWeekOffset * 7));
 
+  /* Build 7-day array Mon–Sun */
   var days = [];
-  for (var i = 0; i < 5; i++) {
-    var d = new Date(monday); d.setDate(monday.getDate() + i); days.push(d);
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    days.push(d);
   }
 
   var todayStr = toDateStr(today);
   var dateFrom = toDateStr(days[0]);
-  var dateTo   = toDateStr(days[4]);
+  var dateTo   = toDateStr(days[6]);
 
   /* Week label */
-  var wkLabel = formatShort(days[0]) + ' – ' + formatShort(days[4]);
   var weekLabelEl = document.getElementById('calWeekLabel');
-  if (weekLabelEl) weekLabelEl.textContent = wkLabel;
+  if (weekLabelEl) {
+    weekLabelEl.textContent = formatShort(days[0]) + ' – ' + formatShort(days[6]);
+  }
 
+  /* ── Fetch activities ─────────────────────────────────
+     FIX: use .or() instead of .is('group_id', null)
+     to reliably retrieve personal activities from Supabase.
+  ─────────────────────────────────────────────────────── */
   var actRes = await DAM.db()
-    .from('activities').select('*')
-    .eq('user_id', currentUser.id).is('group_id', null)
-    .gte('activity_date', dateFrom).lte('activity_date', dateTo)
+    .from('activities')
+    .select('*')
+    .eq('user_id', currentUser.id)
+    .or('group_id.is.null,group_id.eq.00000000-0000-0000-0000-000000000000')
+    .gte('activity_date', dateFrom)
+    .lte('activity_date', dateTo)
     .order('from_time');
+
   var acts = actRes.data || [];
 
-  /* Build header */
-  var header = '<div class="cal5-header">';
-  days.forEach(function (d) {
-    var ds = toDateStr(d);
+  /* Fallback: if the OR filter returns nothing, try without it */
+  if (acts.length === 0 && !actRes.error) {
+    var fallback = await DAM.db()
+      .from('activities')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .gte('activity_date', dateFrom)
+      .lte('activity_date', dateTo)
+      .order('from_time');
+    acts = (fallback.data || []).filter(function (a) { return !a.group_id; });
+  }
+
+  /* ── Build HTML ─────────────────────────────────────── */
+  /* Header row */
+  var header = '<div class="cal7-header">';
+  days.forEach(function (d, i) {
+    var ds      = toDateStr(d);
     var isToday = ds === todayStr;
-    var dayAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
-    if (isToday) {
-      header += '<div class="cal5-header-cell today">' +
-        '<span class="hdr-day">' + dayAbbr + '</span>' +
-        '<span class="hdr-date">' + d.getDate() + '</span></div>';
-    } else {
-      header += '<div class="cal5-header-cell">' +
-        '<span class="hdr-day">' + dayAbbr + '</span>' +
-        '<span class="hdr-date" style="font-size:1.1rem; font-weight:700; color:#fff; display:block; margin-top:2px;">' + d.getDate() + '</span></div>';
-    }
+    var isWknd  = (i === 5 || i === 6);   /* Sat / Sun */
+    header +=
+      '<div class="cal7-header-cell' +
+        (isToday ? ' today' : '') +
+        (isWknd  ? ' weekend' : '') + '">' +
+        '<span class="hdr-abbr">' + WEEKDAYS[i] + '</span>' +
+        '<span class="hdr-num' + (isToday ? ' today-circle' : '') + '">' +
+          d.getDate() +
+        '</span>' +
+        '<span class="hdr-month">' +
+          d.toLocaleDateString('en-CA', { month: 'short' }) +
+        '</span>' +
+      '</div>';
   });
   header += '</div>';
 
-  /* Build grid */
-  var body = '<div class="cal5-grid">';
-  days.forEach(function (d) {
+  /* Cell grid */
+  var body = '<div class="cal7-grid">';
+  days.forEach(function (d, idx) {
     var ds      = toDateStr(d);
     var isToday = ds === todayStr;
     var isPast  = d < today && !isToday;
+    var isWknd  = (idx === 5 || idx === 6);
     var dayActs = acts.filter(function (a) { return a.activity_date === ds; });
 
-    /* Activity chips (max 3 visible) */
+    /* Activity chips */
     var chips = '';
-    dayActs.slice(0, 3).forEach(function (a) {
-      var icon = ACTIVITY_ICONS[a.activity] || '📌';
-      var dot  = getStatusDot(a, ds);
-      chips += '<div class="cal5-activity">' +
-        dot +
-        '<span class="cal5-activity-icon">' + icon + '</span>' +
-        '<span class="cal5-activity-text">' + esc(a.activity) + '</span>' +
-      '</div>';
-    });
-    if (dayActs.length > 3) chips += '<div class="cal5-more">+' + (dayActs.length - 3) + ' more</div>';
-
-    /* Hover tooltip */
-    var tipRows = '';
-    if (dayActs.length === 0) {
-      tipRows = '<div class="cal5-tooltip-empty">No activities</div>';
-    } else {
-      dayActs.slice(0, 5).forEach(function (a) {
-        var icon = ACTIVITY_ICONS[a.activity] || '📌';
-        tipRows += '<div class="cal5-tooltip-row">' +
-          '<span class="cal5-tooltip-icon">' + icon + '</span>' +
-          '<span>' +
-            '<div class="cal5-tooltip-name">' + esc(a.activity) + '</div>' +
-            '<div class="cal5-tooltip-time">' + fmt12h(a.from_time) + '–' + fmt12h(a.end_time) +
-              (a.location ? ' · ' + esc(a.location) : '') +
-            '</div>' +
-          '</span>' +
+    dayActs.slice(0, 4).forEach(function (a, chipIdx) {
+      var icon   = ACTIVITY_ICONS[a.activity] || '📌';
+      var dot    = getStatusDot(a, ds);
+      var colIdx = chipIdx % CHIP_COLORS.length;
+      var col    = CHIP_COLORS[colIdx];
+      chips +=
+        '<div class="cal7-chip" style="' +
+          'background:' + col.bg + ';' +
+          'border-left:3px solid ' + col.border + ';' +
+          'color:' + col.text + ';" ' +
+          'onclick="event.stopPropagation(); openViewDay(\'' + ds + '\', this.closest(\'.cal7-cell\'))">' +
+          dot +
+          '<span class="cal7-chip-icon">' + icon + '</span>' +
+          '<span class="cal7-chip-text">' + esc(a.activity) + '</span>' +
         '</div>';
-      });
-      if (dayActs.length > 5) tipRows += '<div class="cal5-tooltip-empty">+' + (dayActs.length-5) + ' more</div>';
+    });
+    if (dayActs.length > 4) {
+      chips += '<div class="cal7-more">+' + (dayActs.length - 4) + ' more</div>';
     }
 
-    var cellClass = 'cal5-cell' + (isToday ? ' today' : '') + (isPast ? ' past' : '');
+    /* Hover tooltip */
+    var tipRows = dayActs.length === 0
+      ? '<div class="cal5-tooltip-empty">No activities</div>'
+      : dayActs.slice(0, 5).map(function (a) {
+          var icon = ACTIVITY_ICONS[a.activity] || '📌';
+          return '<div class="cal5-tooltip-row">' +
+            '<span class="cal5-tooltip-icon">' + icon + '</span>' +
+            '<span>' +
+              '<div class="cal5-tooltip-name">' + esc(a.activity) + '</div>' +
+              '<div class="cal5-tooltip-time">' +
+                fmt12h(a.from_time) + '–' + fmt12h(a.end_time) +
+                (a.location ? ' · ' + esc(a.location) : '') +
+              '</div>' +
+            '</span>' +
+          '</div>';
+        }).join('') +
+        (dayActs.length > 5
+          ? '<div class="cal5-tooltip-empty">+' + (dayActs.length - 5) + ' more</div>'
+          : '');
 
-    body += '<div class="' + cellClass + '" onclick="openViewDay(\'' + ds + '\', this)">' +
-      '<div class="cal5-day-num' + (isToday ? ' today-num' : '') + '">' +
-        '<span>' + d.getDate() + '</span>' +
-        '<div class="cal5-controls">' +
-          '<button class="cal5-btn plus" title="Add activity" onclick="event.stopPropagation(); openAddActivity(\'' + ds + '\')">+</button>' +
-          '<button class="cal5-btn minus" title="View/edit" onclick="event.stopPropagation(); openViewDay(\'' + ds + '\', this.closest(\'.cal5-cell\'))">−</button>' +
+    var cls = 'cal7-cell' +
+      (isToday ? ' today'   : '') +
+      (isPast  ? ' past'    : '') +
+      (isWknd  ? ' weekend' : '');
+
+    body +=
+      '<div class="' + cls + '" onclick="openViewDay(\'' + ds + '\', this)">' +
+        '<div class="cal7-cell-top">' +
+          '<div class="cal7-controls">' +
+            '<button class="cal5-btn plus" title="Add activity" ' +
+              'onclick="event.stopPropagation(); openAddActivity(\'' + ds + '\')">+</button>' +
+            '<button class="cal5-btn minus" title="View activities" ' +
+              'onclick="event.stopPropagation(); openViewDay(\'' + ds + '\', this.closest(\'.cal7-cell\'))">−</button>' +
+          '</div>' +
         '</div>' +
-      '</div>' +
-      chips +
-      '<div class="cal5-tooltip">' + tipRows + '</div>' +
-    '</div>';
+        chips +
+        '<div class="cal5-tooltip">' + tipRows + '</div>' +
+      '</div>';
   });
   body += '</div>';
 
-  root.innerHTML = '<div class="cal5-wrap">' + header + body + '</div>';
+  root.innerHTML = '<div class="cal5-wrap cal7-wrap">' + header + body + '</div>';
 }
 
-/* ── Open add activity modal ─────────────────────────────*/
+/* ── Add Activity ─────────────────────────────────────────*/
 function openAddActivity(dateStr) {
   pendingDate = dateStr;
-  document.getElementById('addActivityDate').textContent = formatDisplayDate(dateStr);
-  document.getElementById('activityType').value = '';
+  var d = new Date(dateStr + 'T00:00:00');
+  document.getElementById('addActivityDate').textContent =
+    d.toLocaleDateString('en-CA', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+  document.getElementById('activityType').value     = '';
   document.getElementById('activityLocation').value = '';
   resetTimePicker('From');
   resetTimePicker('End');
-  ['activityTypeErr','activityFromErr','activityEndErr','activityGenErr'].forEach(function (id) {
+  ['activityTypeErr','activityFromErr','activityEndErr','activityGenErr',
+   'activityOverlapErr'].forEach(function (id) {
     var el = document.getElementById(id);
     if (el) el.classList.remove('visible');
   });
@@ -274,7 +332,6 @@ function openAddActivity(dateStr) {
   document.getElementById('addActivityModal').classList.add('is-open');
 }
 
-/* ── Save activity ────────────────────────────────────────*/
 async function saveActivity() {
   var type = document.getElementById('activityType').value;
   var from = getTimePickerValue('From');
@@ -282,14 +339,17 @@ async function saveActivity() {
   var loc  = document.getElementById('activityLocation').value.trim();
   var valid = true;
 
-  document.getElementById('activityGenErr').classList.remove('visible');
+  /* Hide errors */
+  ['activityGenErr','activityOverlapErr'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.classList.remove('visible');
+  });
 
   if (!type) {
     document.getElementById('activityTypeErr').classList.add('visible'); valid = false;
   } else {
     document.getElementById('activityTypeErr').classList.remove('visible');
   }
-
   if (!from) {
     document.getElementById('activityFromErr').classList.add('visible');
     document.getElementById('activityFromWrap').classList.add('is-error'); valid = false;
@@ -297,7 +357,6 @@ async function saveActivity() {
     document.getElementById('activityFromErr').classList.remove('visible');
     document.getElementById('activityFromWrap').classList.remove('is-error');
   }
-
   if (!end) {
     document.getElementById('activityEndErr').classList.add('visible');
     document.getElementById('activityEndWrap').classList.add('is-error'); valid = false;
@@ -305,15 +364,38 @@ async function saveActivity() {
     document.getElementById('activityEndErr').classList.remove('visible');
     document.getElementById('activityEndWrap').classList.remove('is-error');
   }
-
   if (from && end && from >= end) {
     document.getElementById('activityGenErr').classList.add('visible'); valid = false;
   }
-
   if (!valid) return;
 
   var btn = document.getElementById('saveActivityBtn');
-  btn.textContent = 'Saving…'; btn.disabled = true;
+  btn.textContent = 'Checking…'; btn.disabled = true;
+
+  /* ── Overlap check ────────────────────────────────────
+     Call Supabase RPC to see if this time slot conflicts
+     with an existing activity for this user on this date.
+  ─────────────────────────────────────────────────────── */
+  var overlapRes = await DAM.db().rpc('check_activity_overlap', {
+    p_user_id:  currentUser.id,
+    p_group_id: null,
+    p_date:     pendingDate,
+    p_from:     from.substring(0, 5),
+    p_end:      end.substring(0, 5),
+    p_exclude_id: null
+  });
+
+  if (overlapRes.data === true) {
+    btn.textContent = 'Save Activity'; btn.disabled = false;
+    var overlapEl = document.getElementById('activityOverlapErr');
+    if (overlapEl) {
+      overlapEl.textContent = '⚠ This time slot overlaps with an existing activity. Please choose a different time.';
+      overlapEl.classList.add('visible');
+    }
+    return;
+  }
+
+  btn.textContent = 'Saving…';
 
   var res = await DAM.db().from('activities').insert({
     user_id:       currentUser.id,
@@ -328,45 +410,34 @@ async function saveActivity() {
 
   btn.textContent = 'Save Activity'; btn.disabled = false;
 
-  if (res.error) { alert('Error saving: ' + res.error.message); return; }
+  if (res.error) {
+    alert('Error saving activity: ' + res.error.message);
+    return;
+  }
 
   document.getElementById('addActivityModal').classList.remove('is-open');
   await renderCalendar();
 }
 
-/* ── View day schedule modal ──────────────────────────────*/
-/* ── Popup positioning engine ─────────────────────────────*/
+/* ── Day popup ────────────────────────────────────────────*/
 function positionPopup(cellEl) {
   var popup = document.getElementById('dayPopup');
   if (!popup || !cellEl) return;
-
-  var rect  = cellEl.getBoundingClientRect();
-  var popW  = 300;
-  var popH  = 340;   /* estimated max height */
-  var vw    = window.innerWidth;
-  var vh    = window.innerHeight;
-
-  /* Default: open below the cell */
+  var rect = cellEl.getBoundingClientRect();
+  var popW = 300; var popH = 340;
+  var vw   = window.innerWidth; var vh = window.innerHeight;
   var top  = rect.bottom + 6;
   var left = rect.left;
-
-  /* Clamp right edge */
   if (left + popW > vw - 12) left = vw - popW - 12;
   if (left < 8) left = 8;
-
-  /* Determine arrow side */
-  popup.classList.remove('arrow-right', 'opens-up');
+  popup.classList.remove('arrow-right','opens-up');
   if (left > rect.left + 20) popup.classList.add('arrow-right');
-
-  /* Flip upward if not enough space below */
   if (top + popH > vh - 16) {
     top = rect.top - popH - 6;
     if (top < 8) top = 8;
     popup.classList.add('opens-up');
   }
-
-  popup.style.top  = top  + 'px';
-  popup.style.left = left + 'px';
+  popup.style.top = top + 'px'; popup.style.left = left + 'px';
 }
 
 function closeDayPopup() {
@@ -374,42 +445,38 @@ function closeDayPopup() {
   document.getElementById('dayPopupBackdrop').classList.remove('is-open');
 }
 
-/* ── Open day schedule popup ─────────────────────────────*/
 async function openViewDay(dateStr, cellEl) {
-  var popup    = document.getElementById('dayPopup');
-  var body     = document.getElementById('dayPopupBody');
-  var titleEl  = document.getElementById('dayPopupTitle');
-  var subEl    = document.getElementById('dayPopupSubtitle');
-  var addBtn   = document.getElementById('dayPopupAddBtn');
+  var popup   = document.getElementById('dayPopup');
+  var body    = document.getElementById('dayPopupBody');
+  var titleEl = document.getElementById('dayPopupTitle');
+  var subEl   = document.getElementById('dayPopupSubtitle');
+  var addBtn  = document.getElementById('dayPopupAddBtn');
 
-  /* Format date for header */
-  var d       = new Date(dateStr + 'T00:00:00');
-  var dayName = d.toLocaleDateString('en-CA', { weekday: 'long' });
-  var dateFmt = d.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' });
+  var d = new Date(dateStr + 'T00:00:00');
+  titleEl.textContent = d.toLocaleDateString('en-CA', { weekday:'long' });
+  subEl.textContent   = d.toLocaleDateString('en-CA', { month:'long', day:'numeric', year:'numeric' });
 
-  titleEl.textContent = dayName;
-  subEl.textContent   = dateFmt;
+  body.innerHTML =
+    '<div class="day-popup-empty">' +
+      '<div class="day-popup-empty-icon">⏳</div>Loading…' +
+    '</div>';
 
-  /* Show loading state */
-  body.innerHTML = '<div class="day-popup-empty"><div class="day-popup-empty-icon">⏳</div>Loading…</div>';
-
-  /* Position popup near clicked cell before showing */
   if (cellEl) positionPopup(cellEl);
-
   popup.classList.add('is-open');
   document.getElementById('dayPopupBackdrop').classList.add('is-open');
 
-  /* Wire Add button */
-  addBtn.onclick = function () {
-    closeDayPopup();
-    openAddActivity(dateStr);
-  };
+  addBtn.onclick = function () { closeDayPopup(); openAddActivity(dateStr); };
 
-  /* Fetch activities */
-  var res = await DAM.db().from('activities')
-    .select('*').eq('user_id', currentUser.id).is('group_id', null)
-    .eq('activity_date', dateStr).order('from_time');
-  var acts = res.data || [];
+  /* Fetch personal activities for this date */
+  var res = await DAM.db()
+    .from('activities')
+    .select('*')
+    .eq('user_id', currentUser.id)
+    .eq('activity_date', dateStr)
+    .order('from_time');
+
+  /* Filter client-side to personal only */
+  var acts = (res.data || []).filter(function (a) { return !a.group_id; });
 
   if (!acts.length) {
     body.innerHTML =
@@ -420,13 +487,14 @@ async function openViewDay(dateStr, cellEl) {
     return;
   }
 
-  body.innerHTML = acts.map(function (a) {
-    var icon = ACTIVITY_ICONS[a.activity] || '📌';
-    var dot  = getStatusDot(a, dateStr);
-    var loc  = a.location
+  body.innerHTML = acts.map(function (a, idx) {
+    var icon   = ACTIVITY_ICONS[a.activity] || '📌';
+    var dot    = getStatusDot(a, dateStr);
+    var col    = CHIP_COLORS[idx % CHIP_COLORS.length];
+    var loc    = a.location
       ? '<div class="day-popup-item-loc">📍 ' + esc(a.location) + '</div>'
       : '';
-    return '<div class="day-popup-item">' +
+    return '<div class="day-popup-item" style="border-left:3px solid ' + col.border + ';">' +
       '<div class="day-popup-item-icon">' + icon + '</div>' +
       '<div class="day-popup-item-body">' +
         '<div class="day-popup-item-name">' + dot + esc(a.activity) + '</div>' +
@@ -442,26 +510,25 @@ async function openViewDay(dateStr, cellEl) {
 async function deleteActivityPopup(actId, dateStr) {
   if (!confirm('Remove this activity?')) return;
   await DAM.db().from('activities').delete().eq('id', actId);
-  await openViewDay(dateStr, null);  /* refresh popup in place */
+  await openViewDay(dateStr, null);
   await renderCalendar();
 }
 
 /* ── Utilities ────────────────────────────────────────────*/
 function toDateStr(d) {
-  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-}
-function formatDisplayDate(ds) {
-  var d = new Date(ds + 'T00:00:00');
-  return d.toLocaleDateString('en-CA',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0');
 }
 function formatShort(d) {
-  return d.toLocaleDateString('en-CA',{month:'short',day:'numeric'});
+  return d.toLocaleDateString('en-CA', { month:'short', day:'numeric' });
 }
 function fmt12h(t) {
   if (!t) return '';
   var p = t.split(':'); var h = parseInt(p[0]); var m = p[1];
-  return (h%12||12) + ':' + m + (h>=12?' PM':' AM');
+  return (h % 12 || 12) + ':' + m + (h >= 12 ? ' PM' : ' AM');
 }
 function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }

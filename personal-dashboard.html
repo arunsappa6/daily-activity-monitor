@@ -8,7 +8,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#FFFFFF" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-title" content="ActivityMon" />
   <title>My Dashboard — Daily Activity Monitor</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="calendar.css" />
@@ -46,7 +49,7 @@
       </div>
     </div>
 
-    <!-- 5-day personal calendar -->
+    <!-- 7-day personal calendar (Mon–Sun, Colorful Minimalist template) -->
     <div id="calendarRoot" style="margin-bottom:2rem;">
       <p style="color:var(--color-ink-muted);">Loading your schedule…</p>
     </div>
@@ -121,6 +124,7 @@
           <input type="text" id="activityLocation" placeholder="e.g. Home, Toronto YMCA" />
         </div>
         <div class="field-error" id="activityGenErr">⚠ End time must be after start time.</div>
+        <div class="field-error" id="activityOverlapErr">⚠ This time slot overlaps with an existing activity.</div>
       </div>
       <div class="modal-actions" style="margin-top:1.25rem;">
         <button type="button" class="btn--cancel" id="cancelActivityBtn">Cancel</button>
@@ -157,5 +161,12 @@
   <script src="session.js"></script>
   <script src="main.js"></script>
   <script src="personal-dashboard.js"></script>
+<script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js")
+        .then(function(r){ console.log("[SW] registered", r.scope); })
+        .catch(function(e){ console.warn("[SW] failed", e); });
+    }
+  </script>
 </body>
 </html>
