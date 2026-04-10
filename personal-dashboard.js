@@ -151,7 +151,13 @@ function resetTimePicker(label) {
   });
 }
 
-/* ── Status dot ───────────────────────────────────────────*/
+/* ── Resolve icon for combined activity name ──────────────*/
+function resolveIcon(activityName) {
+  if (!activityName) return '📌';
+  /* Handle "Prayer Time — Mosque" → use base activity icon */
+  var base = activityName.split(' — ')[0].trim();
+  return ACTIVITY_ICONS[base] || ACTIVITY_ICONS[activityName] || '📌';
+}
 function getStatusDot(act, dateStr) {
   var now = new Date(); var todayStr = toDateStr(now);
   if (dateStr !== todayStr)
@@ -244,7 +250,7 @@ async function renderCalendar() {
     /* Chips */
     var chips = '';
     dayActs.slice(0,4).forEach(function (a, ci) {
-      var icon = ACTIVITY_ICONS[a.activity] || '📌';
+      var icon = resolveIcon(a.activity);
       var dot  = getStatusDot(a, ds);
       var col  = CHIP_COLORS[ci % CHIP_COLORS.length];
       chips +=
@@ -265,7 +271,7 @@ async function renderCalendar() {
       ? '<div class="cal5-tooltip-empty">No activities</div>'
       : dayActs.slice(0,5).map(function (a) {
           return '<div class="cal5-tooltip-row">' +
-            '<span class="cal5-tooltip-icon">' + (ACTIVITY_ICONS[a.activity]||'📌') + '</span>' +
+            '<span class="cal5-tooltip-icon">' + (resolveIcon(a.activity)||'📌') + '</span>' +
             '<span><div class="cal5-tooltip-name">' + esc(a.activity) + '</div>' +
             '<div class="cal5-tooltip-time">' + fmt12h(a.from_time) + '–' + fmt12h(a.end_time) +
               (a.location ? ' · ' + esc(a.location) : '') + '</div></span></div>';
@@ -295,19 +301,23 @@ function openAddActivity(dateStr) {
   var d = new Date(dateStr + 'T00:00:00');
   document.getElementById('addActivityDate').textContent =
     d.toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-  document.getElementById('activityType').value     = '';
-  document.getElementById('activityLocation').value = '';
-  resetTimePicker('From'); resetTimePicker('End');
-  ['activityTypeErr','activityFromErr','activityEndErr','activityGenErr','activityOverlapErr']
-    .forEach(function (id) { var el=document.getElementById(id); if(el) el.classList.remove('visible'); });
-  ['activityFromWrap','activityEndWrap']
-    .forEach(function (id) { var el=document.getElementById(id); if(el) el.classList.remove('is-error'); });
+
+  /* Use shared modal module to reset all fields */
+  if (typeof initActivityModal === 'function') initActivityModal(dateStr);
+
   document.getElementById('addActivityModal').classList.add('is-open');
+
+  /* Wire sub-activity dropdown */
+  if (typeof wireActivityTypeChange === 'function') wireActivityTypeChange();
 }
 
 /* ── Save Activity ────────────────────────────────────────*/
 async function saveActivity() {
-  var type = document.getElementById('activityType').value;
+  /* Get combined value e.g. "Prayer Time — Mosque" */
+  var type = typeof getActivityValue === 'function'
+    ? getActivityValue()
+    : (document.getElementById('activityType').value || '');
+
   var from = getTimeValue('From');
   var end  = getTimeValue('End');
   var loc  = document.getElementById('activityLocation').value.trim();
@@ -318,9 +328,18 @@ async function saveActivity() {
     var el = document.getElementById(id); if (el) el.classList.remove('visible');
   });
 
-  /* Validate */
-  if (!type) { document.getElementById('activityTypeErr').classList.add('visible'); ok=false; }
+  /* Validate activity type */
+  var rawType = (document.getElementById('activityType') || {}).value || '';
+  if (!rawType) { document.getElementById('activityTypeErr').classList.add('visible'); ok=false; }
   else document.getElementById('activityTypeErr').classList.remove('visible');
+
+  /* Validate sub-activity if visible */
+  var subWrap = document.getElementById('subActivityWrap');
+  var subSel  = document.getElementById('subActivity');
+  var subErr  = document.getElementById('activitySubErr');
+  if (subWrap && subWrap.style.display !== 'none' && subSel && !subSel.value) {
+    if (subErr) subErr.classList.add('visible'); ok=false;
+  } else { if (subErr) subErr.classList.remove('visible'); }
 
   if (!from) {
     document.getElementById('activityFromErr').classList.add('visible');
@@ -361,11 +380,11 @@ async function saveActivity() {
     }
   } catch(e) { /* RPC not set up yet — allow save */ }
 
-  /* Insert */
+  /* Insert — use combined type value */
   var { error } = await DAM.db().from('activities').insert({
     user_id:       currentUser.id,
     group_id:      null,
-    activity:      type,
+    activity:      type || rawType,
     activity_date: pendingDate,
     from_time:     from,
     end_time:      end,
@@ -377,12 +396,11 @@ async function saveActivity() {
 
   if (error) {
     console.error('[DAM] Insert failed:', error);
-    alert('Save failed: ' + error.message +
-          '\n\nPlease run supabase-update-5.sql in Supabase SQL Editor.');
+    alert('Save failed: ' + error.message);
     return;
   }
 
-  console.log('[DAM] Saved! Refreshing calendar…');
+  console.log('[DAM] Saved:', type || rawType);
   closeModal();
   await renderCalendar();
 }
@@ -457,7 +475,7 @@ async function openViewDay(dateStr, cellEl) {
   }
 
   body.innerHTML = acts.map(function (a, idx) {
-    var icon = ACTIVITY_ICONS[a.activity] || '📌';
+    var icon = resolveIcon(a.activity);
     var dot  = getStatusDot(a, dateStr);
     var col  = CHIP_COLORS[idx % CHIP_COLORS.length];
     var loc  = a.location

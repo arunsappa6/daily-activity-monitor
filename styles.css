@@ -2143,3 +2143,191 @@ code {
     color: #F0C040;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   ACTIVITY MODAL — Sub-activity & Location Suggestion Styles
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Sub-activity wrap (animated reveal) ────────────────── */
+#subActivityWrap {
+  animation: slideDown 0.2s ease;
+}
+@keyframes slideDown {
+  from { opacity:0; transform:translateY(-6px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+/* ── Location suggestion section ────────────────────────── */
+.suggest-section {
+  background: #F0F7FF;
+  border: 1.5px solid #AED6F1;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin-top: 0.25rem;
+  animation: slideDown 0.2s ease;
+}
+
+.suggest-prompt-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.suggest-prompt-text {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1B4F72;
+  flex: 1;
+  min-width: 160px;
+}
+
+/* Yes / No buttons */
+.suggest-btn {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.35rem 0.85rem;
+  border-radius: 99px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.suggest-btn.yes {
+  background: #1B4F72;
+  color: #fff;
+}
+.suggest-btn.yes:hover { background: #2E86C1; transform: translateY(-1px); }
+
+.suggest-btn.no {
+  background: #E8E8E8;
+  color: #555;
+}
+.suggest-btn.no:hover { background: #D0D0D0; }
+
+/* Postal code input */
+.suggest-postal-input {
+  flex: 1;
+  min-width: 160px;
+  padding: 0.5rem 0.85rem;
+  border: 1.5px solid #AED6F1;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  outline: none;
+  background: #fff;
+  color: var(--color-ink);
+  transition: border-color 0.15s;
+}
+.suggest-postal-input:focus { border-color: #1B4F72; }
+
+/* ── Place result cards ──────────────────────────────────── */
+#suggestResultsList {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+#suggestResultsList::-webkit-scrollbar { width: 4px; }
+#suggestResultsList::-webkit-scrollbar-thumb { background: #AED6F1; border-radius: 2px; }
+
+.suggest-place-card {
+  background: #fff;
+  border: 1px solid #D6EAF8;
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-left: 4px solid #2E86C1;
+}
+.suggest-place-card:hover {
+  box-shadow: 0 3px 12px rgba(27,79,114,0.12);
+  transform: translateX(2px);
+}
+
+.suggest-place-name {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #1B4F72;
+  margin-bottom: 2px;
+}
+
+.suggest-place-addr {
+  font-size: 0.78rem;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.suggest-place-meta {
+  font-size: 0.75rem;
+  color: #888;
+  margin-bottom: 6px;
+}
+
+/* Map + Select buttons on each card */
+.suggest-place-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.suggest-map-btn {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 99px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+}
+
+.suggest-map-btn.google {
+  background: #E8F5E9;
+  color: #1B5E20;
+  border: 1px solid #A5D6A7;
+}
+.suggest-map-btn.google:hover { background: #C8E6C9; }
+
+.suggest-map-btn.apple {
+  background: #F3E5F5;
+  color: #4A148C;
+  border: 1px solid #CE93D8;
+}
+.suggest-map-btn.apple:hover { background: #E1BEE7; }
+
+.suggest-map-btn.select {
+  background: #1B4F72;
+  color: #fff;
+  border: 1px solid #1B4F72;
+}
+.suggest-map-btn.select:hover { background: #2E86C1; }
+
+/* Empty / no-key states */
+.suggest-empty {
+  text-align: center;
+  padding: 1rem;
+  font-size: 0.85rem;
+  color: #888;
+  font-style: italic;
+}
+
+.suggest-no-key {
+  padding: 0.75rem;
+  background: #FFF8E1;
+  border-radius: 8px;
+  border: 1px solid #FFE082;
+}
+
+/* ── ACTIVITY ICONS in popup — handle "Type — SubType" ──── */
+/* Already handled by ACTIVITY_ICONS using base split */

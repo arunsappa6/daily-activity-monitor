@@ -78,10 +78,12 @@
 
   <!-- ══ ADD ACTIVITY MODAL ════════════════════════════════ -->
   <div class="modal-overlay" id="addActivityModal" role="dialog" aria-modal="true">
-    <div class="modal-box" style="max-width:460px;">
+    <div class="modal-box" style="max-width:480px; max-height:90vh; overflow-y:auto;">
       <div class="modal-title">Add Activity</div>
       <div class="modal-subtitle" id="addActivityDate"></div>
       <div class="modal-form">
+
+        <!-- Activity Type -->
         <div class="form-group">
           <label for="activityType">Activity <span class="required">*</span></label>
           <div class="select-wrapper">
@@ -107,25 +109,76 @@
           </div>
           <span class="field-error" id="activityTypeErr">⚠ Please select an activity.</span>
         </div>
+
+        <!-- Sub-Activity (shown dynamically) -->
+        <div class="form-group" id="subActivityWrap" style="display:none;">
+          <label for="subActivity">Type <span class="required">*</span></label>
+          <div class="select-wrapper">
+            <select id="subActivity">
+              <option value="">— Select type —</option>
+            </select>
+          </div>
+          <span class="field-error" id="activitySubErr">⚠ Please select a type.</span>
+        </div>
+
+        <!-- Time pickers -->
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
           <div class="form-group">
-            <label for="activityFrom">From Time <span class="required">*</span></label>
+            <label>From Time <span class="required">*</span></label>
             <div class="time-picker-wrap" id="activityFromWrap"></div>
             <span class="field-error" id="activityFromErr">⚠ Please select a from time.</span>
           </div>
           <div class="form-group">
-            <label for="activityEnd">End Time <span class="required">*</span></label>
+            <label>End Time <span class="required">*</span></label>
             <div class="time-picker-wrap" id="activityEndWrap"></div>
             <span class="field-error" id="activityEndErr">⚠ Please select an end time.</span>
           </div>
         </div>
+
+        <!-- Location -->
         <div class="form-group">
           <label for="activityLocation">Location</label>
-          <input type="text" id="activityLocation" placeholder="e.g. Home, Toronto YMCA" />
+          <input type="text" id="activityLocation" placeholder="e.g. Home, Toronto YMCA"
+                 autocomplete="off" />
         </div>
+
+        <!-- Location Suggestion Section -->
+        <div id="locationSuggestSection" style="display:none;">
+          <div class="suggest-section">
+
+            <!-- Prompt row -->
+            <div id="suggestPromptRow" style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+              <span class="suggest-prompt-icon">📍</span>
+              <span id="suggestPromptText" class="suggest-prompt-text"></span>
+              <button type="button" class="suggest-btn yes" onclick="onSuggestYes()">Yes, suggest!</button>
+              <button type="button" class="suggest-btn no"  onclick="onSuggestNo()">No thanks</button>
+            </div>
+
+            <!-- Postal code input row -->
+            <div id="suggestPostalRow" style="display:none;">
+              <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+                <input type="text" id="suggestPostalInput"
+                       placeholder="Enter your postal code (e.g. M2R 1Q2)"
+                       class="suggest-postal-input"
+                       maxlength="10"
+                       onkeydown="if(event.key==='Enter') searchNearbyPlaces()" />
+                <button type="button" class="suggest-btn yes" onclick="searchNearbyPlaces()">🔍 Search</button>
+                <button type="button" class="suggest-btn no"  onclick="onSuggestNo()">Cancel</button>
+              </div>
+            </div>
+
+            <!-- Results -->
+            <div id="suggestResultsRow" style="display:none;">
+              <div id="suggestResultsList"></div>
+            </div>
+
+          </div>
+        </div>
+
         <div class="field-error" id="activityGenErr">⚠ End time must be after start time.</div>
         <div class="field-error" id="activityOverlapErr">⚠ This time slot overlaps with an existing activity.</div>
       </div>
+
       <div class="modal-actions" style="margin-top:1.25rem;">
         <button type="button" class="btn--cancel" id="cancelActivityBtn">Cancel</button>
         <button type="button" class="btn--submit" id="saveActivityBtn" style="margin-top:0;">Save Activity</button>
@@ -161,6 +214,13 @@
   <script src="session.js"></script>
   <script src="main.js"></script>
   <script src="personal-dashboard.js"></script>
+  <script src="activity-modal.js"></script>
+  <script>
+    /* Wire up activity type change after DOM ready */
+    document.addEventListener('DOMContentLoaded', function () {
+      wireActivityTypeChange();
+    });
+  </script>
 <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js")

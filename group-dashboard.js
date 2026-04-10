@@ -263,7 +263,7 @@ async function renderCalendar() {
 
     var chips = '';
     dayActs.slice(0, 3).forEach(function (a) {
-      var icon = ACTIVITY_ICONS[a.activity] || '📌';
+      var icon = resolveIcon(a.activity);
       var dot  = getStatusDot(a, ds);
       chips += '<div class="cal5-activity" onclick="openEditActivity(event,\'' + ds + '\',\'' + a.id + '\')">' +
         dot +
@@ -278,7 +278,7 @@ async function renderCalendar() {
       ? '<div class="cal5-tooltip-empty">No activities</div>'
       : dayActs.slice(0,5).map(function (a) {
           return '<div class="cal5-tooltip-row">' +
-            '<span class="cal5-tooltip-icon">' + (ACTIVITY_ICONS[a.activity]||'📌') + '</span>' +
+            '<span class="cal5-tooltip-icon">' + (resolveIcon(a.activity)) + '</span>' +
             '<span><div class="cal5-tooltip-name">' + esc(a.activity) + '</div>' +
             '<div class="cal5-tooltip-time">' + fmt12h(a.from_time) + '–' + fmt12h(a.end_time) +
               (a.location ? ' · ' + esc(a.location) : '') + '</div></span>' +
@@ -311,16 +311,11 @@ function openAddActivity(dateStr) {
   editingActivityId = null;
   document.getElementById('addActivityTitle').textContent = 'Add Activity';
   document.getElementById('addActivityDate').textContent  = formatDisplayDate(dateStr);
-  document.getElementById('activityType').value     = '';
-  document.getElementById('activityLocation').value = '';
-  resetTimePicker('From');
-  resetTimePicker('End');
-  ['activityTypeErr','activityFromErr','activityEndErr','activityGenErr'].forEach(function (id) {
-    var el = document.getElementById(id); if (el) el.classList.remove('visible');
-  });
-  ['activityFromWrap','activityEndWrap'].forEach(function (id) {
-    var el = document.getElementById(id); if (el) el.classList.remove('is-error');
-  });
+
+  /* Use shared modal module */
+  if (typeof initActivityModal === 'function') initActivityModal(dateStr);
+  if (typeof wireActivityTypeChange === 'function') wireActivityTypeChange();
+
   document.getElementById('addActivityModal').classList.add('is-open');
 }
 
@@ -343,7 +338,9 @@ function setupActivityModal() {
   });
 
   document.getElementById('saveActivityBtn').addEventListener('click', async function () {
-    var type  = document.getElementById('activityType').value;
+    /* Use shared modal module for combined activity value */
+    var rawType = (document.getElementById('activityType') || {}).value || '';
+    var type  = typeof getActivityValue === 'function' ? getActivityValue() : rawType;
     var from  = getTimePickerValue('From');
     var end   = getTimePickerValue('End');
     var loc   = document.getElementById('activityLocation').value.trim();
@@ -351,8 +348,16 @@ function setupActivityModal() {
     var valid = true;
     document.getElementById('activityGenErr').classList.remove('visible');
 
-    if (!type) { document.getElementById('activityTypeErr').classList.add('visible'); valid = false; }
-    else        { document.getElementById('activityTypeErr').classList.remove('visible'); }
+    if (!rawType) { document.getElementById('activityTypeErr').classList.add('visible'); valid = false; }
+    else          { document.getElementById('activityTypeErr').classList.remove('visible'); }
+
+    /* Validate sub-activity */
+    var subWrap = document.getElementById('subActivityWrap');
+    var subSel  = document.getElementById('subActivity');
+    var subErr  = document.getElementById('activitySubErr');
+    if (subWrap && subWrap.style.display !== 'none' && subSel && !subSel.value) {
+      if (subErr) subErr.classList.add('visible'); valid = false;
+    } else { if (subErr) subErr.classList.remove('visible'); }
     if (!from)  { document.getElementById('activityFromErr').classList.add('visible'); valid = false; }
     else        { document.getElementById('activityFromErr').classList.remove('visible'); }
     if (!end)   { document.getElementById('activityEndErr').classList.add('visible'); valid = false; }
@@ -368,7 +373,7 @@ function setupActivityModal() {
     var payload = {
       user_id:       currentUser.id,
       group_id:      selectedGroup ? selectedGroup.id : null,
-      activity:      type,
+      activity:      type || rawType,   /* combined value e.g. "Prayer Time — Mosque" */
       activity_date: pendingDate,
       from_time:     from,
       end_time:      end,
@@ -492,7 +497,7 @@ async function openViewDay(dateStr, cellEl) {
   }
 
   body.innerHTML = acts.map(function (a) {
-    var icon   = ACTIVITY_ICONS[a.activity] || '📌';
+    var icon   = resolveIcon(a.activity);
     var dot    = getStatusDot(a, dateStr);
     var loc    = a.location
       ? '<div class="day-popup-item-loc">📍 ' + esc(a.location) + '</div>'
