@@ -330,6 +330,11 @@ function setupActivityModal() {
   buildTimePicker('From', 'activityFromWrap');
   buildTimePicker('End',  'activityEndWrap');
 
+  /* Wire sub-activity dropdown from activity-modal.js */
+  if (typeof wireActivityTypeChange === 'function') {
+    wireActivityTypeChange();
+  }
+
   document.getElementById('cancelActivityBtn').addEventListener('click', function () {
     document.getElementById('addActivityModal').classList.remove('is-open');
   });

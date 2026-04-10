@@ -93,6 +93,11 @@ document.addEventListener('DOMContentLoaded', async function () {
   });
   document.getElementById('saveActivityBtn').addEventListener('click', saveActivity);
 
+  /* Wire sub-activity dropdown — activity-modal.js must be loaded first */
+  if (typeof wireActivityTypeChange === 'function') {
+    wireActivityTypeChange();
+  }
+
   /* Popup close */
   document.getElementById('dayPopupClose').addEventListener('click', closeDayPopup);
   document.getElementById('dayPopupBackdrop').addEventListener('click', closeDayPopup);
