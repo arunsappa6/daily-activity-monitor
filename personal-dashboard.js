@@ -300,6 +300,142 @@ async function renderCalendar() {
   root.innerHTML = '<div class="cal5-wrap cal7-wrap">' + header + body + '</div>';
 }
 
+/* ═══════════════════════════════════════════════════════════
+   SUB-ACTIVITIES & LOCATION SUGGESTION
+   All inline — no external file dependency
+   ═══════════════════════════════════════════════════════════ */
+
+var SUB_ACTIVITIES = {
+  'Prayer Time':    ['🛕 Hindu Mandir','☸️ Buddhist Vihara','⛪ Church','🕌 Mosque','✡️ Synagogue','🪯 Gurudwara'],
+  'Learning':       ['📚 Library','🏠 Home','🏢 Community Center'],
+  'Breakfast Prep': ['🏠 Home Made','📱 Online Order'],
+  'Work':           ['🏠 Work from Home','🏢 Work from Office']
+};
+
+/* Search keywords for location suggestion */
+var SUGGEST_KEYWORDS = {
+  'Hindu Mandir':'Hindu temple mandir',
+  'Buddhist Vihara':'Buddhist temple vihara',
+  'Church':'church',
+  'Mosque':'mosque masjid',
+  'Synagogue':'synagogue',
+  'Gurudwara':'Gurudwara Sikh temple',
+  'Library':'public library',
+  'Community Center':'community center',
+  'Work from Office':'office coworking space',
+  'Cycling':'cycling park trail',
+  'Jogging':'jogging park trail',
+  'Visit Spiritual Place':'temple spiritual place'
+};
+
+function onActivityTypeChange() {
+  var actSel  = document.getElementById('activityType');
+  var subWrap = document.getElementById('subActivityWrap');
+  var subSel  = document.getElementById('subActivity');
+  var val     = actSel ? actSel.value : '';
+
+  /* Show / hide sub-activity dropdown */
+  var subs = SUB_ACTIVITIES[val];
+  if (subs && subWrap && subSel) {
+    subSel.innerHTML = '<option value="">— Select type —</option>' +
+      subs.map(function (s) {
+        var v = s.replace(/^[^\w]*\s*/, ''); /* strip emoji for value */
+        return '<option value="' + v + '">' + s + '</option>';
+      }).join('');
+    subWrap.style.display = 'block';
+  } else if (subWrap) {
+    subWrap.style.display = 'none';
+    if (subSel) subSel.innerHTML = '<option value="">— Select type —</option>';
+  }
+
+  /* Reset location suggestion */
+  var suggestSec = document.getElementById('locationSuggestSection');
+  if (suggestSec) suggestSec.style.display = 'none';
+
+  /* Check if suggestion is relevant for this top-level activity */
+  if (val && !subs && SUGGEST_KEYWORDS[val]) {
+    showSuggestionPrompt(val, val);
+  }
+}
+
+function onSubActivityChange() {
+  var actSel = document.getElementById('activityType');
+  var subSel = document.getElementById('subActivity');
+  var parent = actSel ? actSel.value : '';
+  var sub    = subSel ? subSel.value : '';
+  var keyword = SUGGEST_KEYWORDS[sub];
+  if (keyword) {
+    showSuggestionPrompt(sub, keyword);
+  } else {
+    var suggestSec = document.getElementById('locationSuggestSection');
+    if (suggestSec) suggestSec.style.display = 'none';
+  }
+}
+
+function showSuggestionPrompt(label, keyword) {
+  var sec = document.getElementById('locationSuggestSection');
+  var txt = document.getElementById('suggestPromptText');
+  if (!sec) return;
+  sec.style.display = 'block';
+  if (txt) txt.textContent = 'Can I suggest nearest ' + label + ' options near you?';
+  document.getElementById('suggestPromptRow').style.display  = 'flex';
+  document.getElementById('suggestPostalRow').style.display  = 'none';
+  document.getElementById('suggestResultsRow').style.display = 'none';
+  sec.dataset.keyword = keyword;
+}
+
+function onSuggestYes() {
+  document.getElementById('suggestPromptRow').style.display = 'none';
+  document.getElementById('suggestPostalRow').style.display = 'flex';
+  var pi = document.getElementById('suggestPostalInput');
+  if (pi) pi.focus();
+}
+
+function onSuggestNo() {
+  var sec = document.getElementById('locationSuggestSection');
+  if (sec) sec.style.display = 'none';
+}
+
+function searchNearbyPlaces() {
+  var pi      = document.getElementById('suggestPostalInput');
+  var postal  = pi ? pi.value.trim() : '';
+  var sec     = document.getElementById('locationSuggestSection');
+  var keyword = sec ? (sec.dataset.keyword || '') : '';
+  var resRow  = document.getElementById('suggestResultsRow');
+  var resList = document.getElementById('suggestResultsList');
+
+  if (!postal) {
+    if (pi) { pi.style.borderColor = '#E74C3C'; pi.placeholder = 'Please enter postal code'; }
+    return;
+  }
+  if (pi) pi.style.borderColor = '';
+
+  resRow.style.display = 'block';
+
+  /* Build Google Maps and Apple Maps search links */
+  var q           = encodeURIComponent(keyword + ' near ' + postal);
+  var googleUrl   = 'https://www.google.com/maps/search/' + q;
+  var appleUrl    = 'https://maps.apple.com/?q=' + q;
+
+  resList.innerHTML =
+    '<div style="padding:0.75rem; background:#F0F7FF; border-radius:10px; border:1px solid #AED6F1;">' +
+      '<p style="font-size:0.85rem; font-weight:600; color:#1B4F72; margin-bottom:0.6rem;">' +
+        'Search for <strong>' + esc(keyword) + '</strong> near <strong>' + esc(postal) + '</strong>:' +
+      '</p>' +
+      '<div style="display:flex; gap:0.6rem; flex-wrap:wrap;">' +
+        '<a href="' + googleUrl + '" target="_blank" rel="noopener" class="suggest-map-btn google">' +
+          '📍 Open Google Maps' +
+        '</a>' +
+        '<a href="' + appleUrl + '" target="_blank" rel="noopener" class="suggest-map-btn apple">' +
+          '🗺 Open Apple Maps' +
+        '</a>' +
+      '</div>' +
+      '<p style="font-size:0.75rem; color:#888; margin-top:0.5rem;">' +
+        'Results within 30 km of your postal code will appear in the map.' +
+      '</p>' +
+    '</div>';
+}
+
 /* ── Open Add Activity Modal ─────────────────────────────*/
 function openAddActivity(dateStr) {
   pendingDate = dateStr;
@@ -307,21 +443,44 @@ function openAddActivity(dateStr) {
   document.getElementById('addActivityDate').textContent =
     d.toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
 
-  /* Use shared modal module to reset all fields */
-  if (typeof initActivityModal === 'function') initActivityModal(dateStr);
+  /* Reset all modal fields */
+  var actSel  = document.getElementById('activityType');
+  var subSel  = document.getElementById('subActivity');
+  var subWrap = document.getElementById('subActivityWrap');
+  var locInp  = document.getElementById('activityLocation');
+  var sugSec  = document.getElementById('locationSuggestSection');
+
+  if (actSel)  actSel.value   = '';
+  if (locInp)  locInp.value   = '';
+  if (subSel)  subSel.innerHTML = '<option value="">— Select type —</option>';
+  if (subWrap) subWrap.style.display  = 'none';
+  if (sugSec)  sugSec.style.display   = 'none';
+
+  /* Reset time pickers */
+  resetTimePicker('From'); resetTimePicker('End');
+
+  /* Clear all errors */
+  ['activityTypeErr','activitySubErr','activityFromErr','activityEndErr',
+   'activityGenErr','activityOverlapErr'].forEach(function (id) {
+    var el = document.getElementById(id); if (el) el.classList.remove('visible');
+  });
+  ['activityFromWrap','activityEndWrap'].forEach(function (id) {
+    var el = document.getElementById(id); if (el) el.classList.remove('is-error');
+  });
+
+  /* Wire change events fresh each time */
+  if (actSel) actSel.onchange = onActivityTypeChange;
+  if (subSel) subSel.onchange = onSubActivityChange;
 
   document.getElementById('addActivityModal').classList.add('is-open');
-
-  /* Wire sub-activity dropdown */
-  if (typeof wireActivityTypeChange === 'function') wireActivityTypeChange();
 }
 
 /* ── Save Activity ────────────────────────────────────────*/
 async function saveActivity() {
   /* Get combined value e.g. "Prayer Time — Mosque" */
-  var type = typeof getActivityValue === 'function'
-    ? getActivityValue()
-    : (document.getElementById('activityType').value || '');
+  var rawType = (document.getElementById('activityType') || {}).value || '';
+  var subVal  = (document.getElementById('subActivity')  || {}).value || '';
+  var type    = rawType ? (subVal ? rawType + ' — ' + subVal : rawType) : '';
 
   var from = getTimeValue('From');
   var end  = getTimeValue('End');
@@ -334,7 +493,6 @@ async function saveActivity() {
   });
 
   /* Validate activity type */
-  var rawType = (document.getElementById('activityType') || {}).value || '';
   if (!rawType) { document.getElementById('activityTypeErr').classList.add('visible'); ok=false; }
   else document.getElementById('activityTypeErr').classList.remove('visible');
 
@@ -389,7 +547,7 @@ async function saveActivity() {
   var { error } = await DAM.db().from('activities').insert({
     user_id:       currentUser.id,
     group_id:      null,
-    activity:      type || rawType,
+    activity:      type,
     activity_date: pendingDate,
     from_time:     from,
     end_time:      end,
@@ -405,7 +563,7 @@ async function saveActivity() {
     return;
   }
 
-  console.log('[DAM] Saved:', type || rawType);
+  console.log('[DAM] Saved:', type);
   closeModal();
   await renderCalendar();
 }

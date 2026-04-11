@@ -296,7 +296,83 @@
   <script src="supabase-config.js"></script>
   <script src="session.js"></script>
   <script src="main.js"></script>
-  <script src="activity-modal.js"></script>
+  <script>
+  /* ── Sub-activity & location suggestion (inline) ─────── */
+  var SUB_ACTIVITIES = {
+    'Prayer Time':    ['🛕 Hindu Mandir','☸️ Buddhist Vihara','⛪ Church','🕌 Mosque','✡️ Synagogue','🪯 Gurudwara'],
+    'Learning':       ['📚 Library','🏠 Home','🏢 Community Center'],
+    'Breakfast Prep': ['🏠 Home Made','📱 Online Order'],
+    'Work':           ['🏠 Work from Home','🏢 Work from Office']
+  };
+  var SUGGEST_KEYWORDS = {
+    'Hindu Mandir':'Hindu temple mandir','Buddhist Vihara':'Buddhist temple vihara',
+    'Church':'church','Mosque':'mosque masjid','Synagogue':'synagogue',
+    'Gurudwara':'Gurudwara Sikh temple','Library':'public library',
+    'Community Center':'community center','Work from Office':'office coworking space'
+  };
+  function onActivityTypeChange() {
+    var actSel=document.getElementById('activityType');
+    var subWrap=document.getElementById('subActivityWrap');
+    var subSel=document.getElementById('subActivity');
+    var val=actSel?actSel.value:'';
+    var subs=SUB_ACTIVITIES[val];
+    if(subs&&subWrap&&subSel){
+      subSel.innerHTML='<option value="">— Select type —</option>'+
+        subs.map(function(s){return '<option value="'+s.replace(/^[^\w]*\s*/,'')+'">'+s+'</option>';}).join('');
+      subWrap.style.display='block';
+    } else if(subWrap){
+      subWrap.style.display='none';
+      if(subSel) subSel.innerHTML='<option value="">— Select type —</option>';
+    }
+    var sec=document.getElementById('locationSuggestSection');
+    if(sec) sec.style.display='none';
+  }
+  function onSubActivityChange() {
+    var subSel=document.getElementById('subActivity');
+    var sub=subSel?subSel.value:'';
+    var kw=SUGGEST_KEYWORDS[sub];
+    if(kw) showSuggestionPrompt(sub,kw);
+    else { var sec=document.getElementById('locationSuggestSection'); if(sec) sec.style.display='none'; }
+  }
+  function showSuggestionPrompt(label,keyword) {
+    var sec=document.getElementById('locationSuggestSection');
+    var txt=document.getElementById('suggestPromptText');
+    if(!sec) return;
+    sec.style.display='block'; sec.dataset.keyword=keyword;
+    if(txt) txt.textContent='Can I suggest nearest '+label+' options near you?';
+    document.getElementById('suggestPromptRow').style.display='flex';
+    document.getElementById('suggestPostalRow').style.display='none';
+    document.getElementById('suggestResultsRow').style.display='none';
+  }
+  function onSuggestYes(){
+    document.getElementById('suggestPromptRow').style.display='none';
+    document.getElementById('suggestPostalRow').style.display='flex';
+    var pi=document.getElementById('suggestPostalInput'); if(pi) pi.focus();
+  }
+  function onSuggestNo(){
+    var sec=document.getElementById('locationSuggestSection'); if(sec) sec.style.display='none';
+  }
+  function searchNearbyPlaces(){
+    var pi=document.getElementById('suggestPostalInput');
+    var postal=pi?pi.value.trim():'';
+    var sec=document.getElementById('locationSuggestSection');
+    var kw=sec?sec.dataset.keyword:'';
+    if(!postal){if(pi){pi.style.borderColor='#E74C3C';} return;}
+    if(pi) pi.style.borderColor='';
+    var resRow=document.getElementById('suggestResultsRow');
+    var resList=document.getElementById('suggestResultsList');
+    resRow.style.display='block';
+    var q=encodeURIComponent(kw+' near '+postal);
+    resList.innerHTML='<div style="padding:0.75rem;background:#F0F7FF;border-radius:10px;border:1px solid #AED6F1;">'+
+      '<p style="font-size:0.85rem;font-weight:600;color:#1B4F72;margin-bottom:0.6rem;">Search for <strong>'+kw+'</strong> near <strong>'+postal+'</strong>:</p>'+
+      '<div style="display:flex;gap:0.6rem;flex-wrap:wrap;">'+
+        '<a href="https://www.google.com/maps/search/'+q+'" target="_blank" class="suggest-map-btn google">📍 Google Maps</a>'+
+        '<a href="https://maps.apple.com/?q='+q+'" target="_blank" class="suggest-map-btn apple">🗺 Apple Maps</a>'+
+      '</div>'+
+      '<p style="font-size:0.75rem;color:#888;margin-top:0.5rem;">Results within 30 km of your postal code will appear in the map.</p>'+
+    '</div>';
+  }
+  </script>
   <script src="group-dashboard.js"></script>
 <script>
     if ("serviceWorker" in navigator) {

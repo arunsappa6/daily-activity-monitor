@@ -312,9 +312,34 @@ function openAddActivity(dateStr) {
   document.getElementById('addActivityTitle').textContent = 'Add Activity';
   document.getElementById('addActivityDate').textContent  = formatDisplayDate(dateStr);
 
-  /* Use shared modal module */
-  if (typeof initActivityModal === 'function') initActivityModal(dateStr);
-  if (typeof wireActivityTypeChange === 'function') wireActivityTypeChange();
+  /* Reset all modal fields */
+  var actSel  = document.getElementById('activityType');
+  var subSel  = document.getElementById('subActivity');
+  var subWrap = document.getElementById('subActivityWrap');
+  var locInp  = document.getElementById('activityLocation');
+  var sugSec  = document.getElementById('locationSuggestSection');
+
+  if (actSel)  actSel.value   = '';
+  if (locInp)  locInp.value   = '';
+  if (subSel)  subSel.innerHTML = '<option value="">— Select type —</option>';
+  if (subWrap) subWrap.style.display  = 'none';
+  if (sugSec)  sugSec.style.display   = 'none';
+
+  resetTimePicker('From'); resetTimePicker('End');
+
+  ['activityTypeErr','activitySubErr','activityFromErr','activityEndErr',
+   'activityGenErr','activityOverlapErr'].forEach(function (id) {
+    var el = document.getElementById(id); if (el) el.classList.remove('visible');
+  });
+  ['activityFromWrap','activityEndWrap'].forEach(function (id) {
+    var el = document.getElementById(id); if (el) el.classList.remove('is-error');
+  });
+
+  /* Wire change events — inline, no external dependency */
+  if (actSel) actSel.onchange = typeof onActivityTypeChange === 'function'
+    ? onActivityTypeChange : null;
+  if (subSel) subSel.onchange = typeof onSubActivityChange === 'function'
+    ? onSubActivityChange : null;
 
   document.getElementById('addActivityModal').classList.add('is-open');
 }
@@ -343,26 +368,19 @@ function setupActivityModal() {
   });
 
   document.getElementById('saveActivityBtn').addEventListener('click', async function () {
-    /* Use shared modal module for combined activity value */
+    /* Build combined activity value inline e.g. "Prayer Time — Mosque" */
     var rawType = (document.getElementById('activityType') || {}).value || '';
-    var type  = typeof getActivityValue === 'function' ? getActivityValue() : rawType;
-    var from  = getTimePickerValue('From');
-    var end   = getTimePickerValue('End');
-    var loc   = document.getElementById('activityLocation').value.trim();
+    var subVal  = (document.getElementById('subActivity')  || {}).value || '';
+    var type    = rawType ? (subVal ? rawType + ' — ' + subVal : rawType) : '';
+    var from    = getTimePickerValue('From');
+    var end     = getTimePickerValue('End');
+    var loc     = document.getElementById('activityLocation').value.trim();
 
     var valid = true;
     document.getElementById('activityGenErr').classList.remove('visible');
 
     if (!rawType) { document.getElementById('activityTypeErr').classList.add('visible'); valid = false; }
     else          { document.getElementById('activityTypeErr').classList.remove('visible'); }
-
-    /* Validate sub-activity */
-    var subWrap = document.getElementById('subActivityWrap');
-    var subSel  = document.getElementById('subActivity');
-    var subErr  = document.getElementById('activitySubErr');
-    if (subWrap && subWrap.style.display !== 'none' && subSel && !subSel.value) {
-      if (subErr) subErr.classList.add('visible'); valid = false;
-    } else { if (subErr) subErr.classList.remove('visible'); }
     if (!from)  { document.getElementById('activityFromErr').classList.add('visible'); valid = false; }
     else        { document.getElementById('activityFromErr').classList.remove('visible'); }
     if (!end)   { document.getElementById('activityEndErr').classList.add('visible'); valid = false; }
@@ -378,7 +396,7 @@ function setupActivityModal() {
     var payload = {
       user_id:       currentUser.id,
       group_id:      selectedGroup ? selectedGroup.id : null,
-      activity:      type || rawType,   /* combined value e.g. "Prayer Time — Mosque" */
+      activity:      type,
       activity_date: pendingDate,
       from_time:     from,
       end_time:      end,
